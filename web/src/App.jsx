@@ -1252,9 +1252,6 @@ function Security({ blocked, run, scenario, vault, plan }) {
                 <WalletCards size={18} color="var(--mint-strong)" />
                 Desk 1 · Verified Allocator
               </h3>
-              <span className="badge-pill mint">
-                <Check size={12} /> Position Sealed
-              </span>
             </div>
 
             <div
@@ -1429,9 +1426,6 @@ function Security({ blocked, run, scenario, vault, plan }) {
                 <TriangleAlert size={18} color="var(--coral)" />
                 Desk 2 · Rogue Desk / Exploiter
               </h3>
-              <span className="badge-pill coral">
-                <X size={12} /> Untrusted Actor
-              </span>
             </div>
 
             <div
