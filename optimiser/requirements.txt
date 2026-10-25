@@ -1,0 +1,7 @@
+pulp==2.9.0
+highspy
+fastapi
+uvicorn[standard]
+web3
+pydantic
+pytest

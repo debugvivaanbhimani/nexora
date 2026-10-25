@@ -11,12 +11,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# --- Environment & Secrets ---
+# --- Environment & Generated ---
 .env
 .env.local
 .env.*.local
 *.pem
 *.key
+shared/deployment.json
 
 # --- Python ---
 __pycache__/
@@ -31,13 +32,14 @@ ENV/
 .mypy_cache/
 .ipynb_checkpoints/
 
-# --- Hardhat / Foundry / Blockchain ---
+# --- Hardhat / Blockchain ---
 artifacts/
 cache/
 typechain/
 typechain-types/
 coverage/
 coverage.json
+gas-report.txt
 .openzeppelin/
 
 # --- Operating System Junk ---

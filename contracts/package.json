@@ -1,0 +1,26 @@
+{
+  "name": "nexora-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for Nexora collateral allocation & double-pledge prevention",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@openzeppelin/contracts": "5.1.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "2.1.2",
+    "@nomicfoundation/hardhat-ethers": "3.1.3",
+    "@nomicfoundation/hardhat-network-helpers": "1.1.2",
+    "@nomicfoundation/hardhat-toolbox": "5.0.0",
+    "chai": "4.5.0",
+    "ethers": "6.17.0",
+    "hardhat": "2.22.17",
+    "hardhat-gas-reporter": "1.0.10",
+    "solc": "0.8.24"
+  }
+}
