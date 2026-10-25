@@ -18,6 +18,7 @@ pnpm-debug.log*
 *.pem
 *.key
 shared/deployment.json
+scripts/bin/
 
 # --- Python ---
 __pycache__/
