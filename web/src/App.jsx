@@ -64,6 +64,8 @@ function App() {
         setHealth(h)
         setEvents(ev || [])
         setPlans(compare || [])
+        const defaultPlan = compare?.find((p) => p.method === 'optimiser') || compare?.[0]
+        if (defaultPlan) setPlan(defaultPlan)
       })
       .catch((err) => {
         console.error('[Nexora] Load error:', err)
@@ -74,7 +76,6 @@ function App() {
 
   const handleScenarioChange = async (newId) => {
     setSelectedScenarioId(newId)
-    setPlan(undefined)
     setLoading(true)
     try {
       const [s, compare] = await Promise.all([
@@ -83,6 +84,8 @@ function App() {
       ])
       setScenario(s)
       setPlans(compare || [])
+      const defaultPlan = compare?.find((p) => p.method === 'optimiser') || compare?.[0]
+      if (defaultPlan) setPlan(defaultPlan)
       await refresh()
       toast.success(`Scenario ${newId.toUpperCase()} loaded`)
     } catch (e) {
@@ -108,11 +111,12 @@ function App() {
   const reset = async () => {
     try {
       await API.reset(selectedScenarioId)
-      setPlan(undefined)
       setBlocked(0)
       await refresh()
       const updatedCmp = await API.compare(selectedScenarioId)
       setPlans(updatedCmp || [])
+      const defaultPlan = updatedCmp?.find((p) => p.method === 'optimiser') || updatedCmp?.[0]
+      setPlan(defaultPlan)
       toast.success('Scenario restored')
     } catch (e) {
       toast.error('Reset failed: ' + e.message)
@@ -250,6 +254,7 @@ function App() {
               scenario={scenario}
               vault={state}
               plan={plan}
+              plans={plans}
               solving={solving}
               optimise={optimise}
             />
@@ -289,9 +294,10 @@ function Loading() {
   )
 }
 
-function Overview({ scenario, vault, plan, solving, optimise }) {
-  const totals = plan?.totals
-  const covered = plan?.coverage?.filter((item) => item.covered).length || 0
+function Overview({ scenario, vault, plan, solving, optimise, plans }) {
+  const activePlan = plan || plans?.find((p) => p.method === 'optimiser') || plans?.[0]
+  const totals = activePlan?.totals
+  const covered = activePlan?.coverage?.filter((item) => item.covered).length || 0
 
   return (
     <>
@@ -299,20 +305,20 @@ function Overview({ scenario, vault, plan, solving, optimise }) {
         <div className="hero-copy">
           <span className="overline">Collateral position</span>
           <h2>
-            {plan
+            {activePlan
               ? totals?.shortfall_lakh
                 ? 'A gap needs your attention.'
                 : 'Every obligation is covered.'
               : 'Put idle collateral to work.'}
           </h2>
           <p>
-            {plan
+            {activePlan
               ? 'The allocation meets priority requirements while preserving scarce repo-eligible inventory.'
               : 'Calculate the lowest-cost eligible allocation across all obligations and record the result on-chain.'}
           </p>
           <button className="button mint" onClick={() => optimise()}>
             <Sparkles />
-            {plan ? 'Run again' : 'Build optimal plan'}
+            {activePlan ? 'Run again' : 'Build optimal plan'}
             <ArrowUpRight />
           </button>
         </div>
@@ -320,13 +326,13 @@ function Overview({ scenario, vault, plan, solving, optimise }) {
           <div
             className="score-ring"
             style={{
-              '--score': plan ? `${totals?.utilisation_pct * 3.6}deg` : '0deg',
+              '--score': activePlan ? `${(totals?.utilisation_pct || 0) * 3.6}deg` : '0deg',
             }}
           >
             <div>
               <strong>
-                {plan ? totals?.utilisation_pct : '—'}
-                {plan && <sup>%</sup>}
+                {activePlan ? totals?.utilisation_pct : '—'}
+                {activePlan && <sup>%</sup>}
               </strong>
               <span>utilised</span>
             </div>
@@ -355,27 +361,27 @@ function Overview({ scenario, vault, plan, solving, optimise }) {
         <Metric
           icon={CircleDollarSign}
           label="Annual funding cost"
-          value={plan ? money(totals?.funding_cost_lakh) : '—'}
+          value={activePlan ? money(totals?.funding_cost_lakh) : '—'}
           note="₹ lakh per annum"
           color="plum"
         />
         <Metric
           icon={TrendingDown}
           label="Effective cost"
-          value={plan ? money(totals?.effective_cost_lakh) : '—'}
+          value={activePlan ? money(totals?.effective_cost_lakh) : '—'}
           note="includes shortfall penalty"
           color="blue"
         />
         <Metric
           icon={ShieldCheck}
           label="Uncovered exposure"
-          value={plan ? money(totals?.shortfall_lakh) : '—'}
+          value={activePlan ? money(totals?.shortfall_lakh) : '—'}
           note={
-            plan && !totals?.shortfall_lakh
+            activePlan && !totals?.shortfall_lakh
               ? 'Fully collateralised'
               : 'awaiting allocation'
           }
-          color={plan && !totals?.shortfall_lakh ? 'green' : 'orange'}
+          color={activePlan && !totals?.shortfall_lakh ? 'green' : 'orange'}
         />
       </section>
 
@@ -439,7 +445,7 @@ function Overview({ scenario, vault, plan, solving, optimise }) {
       </div>
       <section className="obligation-list">
         {scenario.obligations.map((obligation, index) => {
-          const coverage = plan?.coverage?.find(
+          const coverage = activePlan?.coverage?.find(
             (item) => item.obligation_id.toUpperCase() === obligation.id.toUpperCase()
           )
           const percent = coverage
