@@ -83,26 +83,37 @@ cd ..
 
 ## 🚀 How to Run
 
-To run the complete system locally, launch the three components across separate terminal windows:
-
-### Terminal 1: Hardhat Blockchain Node
+### Option 1: Single-Command Dev Runner (Recommended)
+You can start all three services (Hardhat node, deployment/seed, FastAPI gateway, and Vite web dashboard) with a single command:
 ```bash
-cd contracts
-npx hardhat node
+python3 scripts/dev.py
+```
+This script:
+1. Boots the local Hardhat node on port `8545`.
+2. Deploys `CollateralLedger.sol` and seeds scenario `ref.json`.
+3. Launches the FastAPI backend on port `8000`.
+4. Starts the Vite web dashboard on port `5173`.
+5. Prints all service URLs; pressing <kbd>Ctrl+C</kbd> terminates the entire process tree cleanly.
+
+### Option 2: Manual Multi-Terminal Startup
+Alternatively, you can launch each component across separate terminal windows:
+
+#### Terminal 1: Hardhat Blockchain Node
+```bash
+cd contracts && npx hardhat node
 ```
 *Starts local JSON-RPC node at `http://127.0.0.1:8545` (Chain ID `31337`).*
 
-### Terminal 2: FastAPI Backend Engine
+#### Terminal 2: FastAPI Backend Engine
 ```bash
 source .venv/bin/activate
 PYTHONPATH=api:optimiser uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 *Serves REST API at `http://localhost:8000` (Interactive docs at `http://localhost:8000/docs`).*
 
-### Terminal 3: React Web Dashboard
+#### Terminal 3: React Web Dashboard
 ```bash
-cd web
-npm run dev
+cd web && npm run dev
 ```
 *Serves the green editorial dashboard at `http://localhost:5173`.*
 
@@ -112,13 +123,26 @@ npm run dev
 
 All modules have comprehensive automated test suites:
 
-### 1. Smart Contract Tests (15/15 Passed)
+### 1. End-to-End System Smoke Test
+```bash
+python3 scripts/smoke_test.py
+```
+Executes the full sequential protocol against the live stack:
+- Step 1: `GET /health` (connectivity & chain verification)
+- Step 2: `POST /reset` (contract deployment & scenario seeding)
+- Step 3: `POST /optimise` (two-stage mathematical solver)
+- Step 4: `POST /commit` (EVM transaction mining & version incrementing)
+- Step 5: `GET /state` (**Cross-Check**: validates on-chain available for every asset equals optimizer remaining)
+- Step 6: `POST /attack` (validates all 5 adversarial exploit vectors revert with exact custom EVM errors)
+- Step 7: `GET /events` (audit log verification)
+
+### 2. Smart Contract Tests (15/15 Passed)
 ```bash
 cd contracts && npx hardhat test
 ```
 Tests deployment, role access control, asset registration, eligibility rules, single & batch reservations, asset version incrementing, duplicate allocation prevention, and custom EVM error reverts.
 
-### 2. Optimizer & API Integration Tests (45/45 Passed)
+### 3. Optimizer & API Integration Tests (45/45 Passed)
 ```bash
 source .venv/bin/activate
 pytest optimiser api
@@ -128,7 +152,7 @@ Tests:
 - **Scenario Schema Validation (`optimiser/test_scenario.py`)**: Pydantic validation across all 6 scenario files.
 - **API Full Lifecycle (`api/test_api.py`)**: `/health`, `/scenarios`, `/reset`, `/optimise`, `/compare`, `/commit`, `/state`, and all 5 `/attack` simulations.
 
-### 3. Web Dashboard Production Build
+### 4. Web Dashboard Production Build
 ```bash
 cd web && npm run build
 ```
@@ -211,6 +235,9 @@ nexora/
 │       └── s5.json         # Discounted G-Sec market price stress test
 ├── shared/
 │   └── deployment.json     # Generated deployment metadata, contract address, and ABI
+├── scripts/                # Development & testing automation
+│   ├── dev.py              # Cross-platform full-stack dev runner (Hardhat + Seed + API + Web)
+│   └── smoke_test.py       # End-to-end smoke test & on-chain state cross-checker
 └── reference/              # Reference specifications and verification data
 ```
 
