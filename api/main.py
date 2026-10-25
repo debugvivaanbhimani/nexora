@@ -93,6 +93,7 @@ def health():
     w3 = chain.get_web3()
     is_connected = w3.is_connected()
     chain_id = w3.eth.chain_id if is_connected else None
+    block_num = w3.eth.block_number if is_connected else 0
     deployment_addr = None
     try:
         dep = chain.get_deployment()
@@ -101,9 +102,11 @@ def health():
         pass
 
     return {
+        "ok": is_connected,
         "status": "ok",
         "chain_connected": is_connected,
         "chain_id": chain_id,
+        "block": block_num,
         "contract_address": deployment_addr,
     }
 
@@ -222,6 +225,11 @@ def compare_all(req: CompareRequest):
     results = {}
     for m in methods:
         res = solve(scenario_path, method=m, free_qty=free_qty)
+        plan_id = f"{req.scenario_id.lower()}-{m}-1"
+        plan_hash = _compute_canonical_hash(req.scenario_id, res["lines"])
+        res["plan_id"] = plan_id
+        res["plan_hash"] = plan_hash
+        PLANS[plan_id] = res
         results[m] = res
     return results
 

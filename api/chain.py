@@ -1,4 +1,5 @@
 """Blockchain interaction layer for Nexora using Web3.py."""
+import datetime
 import json
 import os
 import re
@@ -342,6 +343,15 @@ def events() -> List[Dict[str, Any]]:
     contract = get_contract(w3)
 
     event_logs: List[Dict[str, Any]] = []
+    current_block = w3.eth.block_number if w3.is_connected() else 0
+
+    accounts_map = {}
+    if dep and "accounts" in dep:
+        accounts = dep["accounts"]
+        accounts_map[accounts.get("admin", "").lower()] = "Admin"
+        accounts_map[accounts.get("allocator", "").lower()] = "Desk 1"
+        accounts_map[accounts.get("desk2", "").lower()] = "Desk 2"
+        accounts_map[accounts.get("lender", "").lower()] = "Lender"
 
     # Map of event names to contract event definitions
     event_names = ["Reserved", "Released", "AllocationCommitted", "AssetRegistered"]
@@ -360,22 +370,81 @@ def events() -> List[Dict[str, Any]]:
                     else:
                         cleaned_args[k] = v
 
+                aid = cleaned_args.get("assetId") or cleaned_args.get("asset")
+                oid = cleaned_args.get("obligationId") or cleaned_args.get("obligation")
+                units = cleaned_args.get("qty") if "qty" in cleaned_args else cleaned_args.get("units")
+                allocator_addr = str(cleaned_args.get("allocator", "")).lower()
+                actor = accounts_map.get(allocator_addr, "Desk 1")
+                reason = (
+                    "Collateral reserved"
+                    if ev_name == "Reserved"
+                    else (
+                        "Plan sealed"
+                        if ev_name == "AllocationCommitted"
+                        else ("Asset registered" if ev_name == "AssetRegistered" else ev_name)
+                    )
+                )
+
+                ts = block_info.timestamp
+                dt_iso = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).isoformat()
+                raw_hash = log.transactionHash.hex() if log.transactionHash else ""
+                clean_hex = raw_hash[2:] if raw_hash.startswith("0x") else raw_hash
+                short_hash = f"0x{clean_hex[:6]}…{clean_hex[-4:]}" if clean_hex else "—"
+
                 event_logs.append(
                     {
                         "type": ev_name,
                         "block": log.blockNumber,
-                        "tx_hash": log.transactionHash.hex(),
-                        "time": block_info.timestamp,
+                        "tx_hash": short_hash,
+                        "full_tx_hash": log.transactionHash.hex() if log.transactionHash else "",
+                        "time": dt_iso,
+                        "timestamp": ts,
+                        "actor": actor,
+                        "reason": reason,
+                        "asset_id": aid,
+                        "obligation_id": oid,
+                        "units": units,
                         "args": cleaned_args,
                     }
                 )
         except Exception:
             continue
 
+    formatted_rejections = []
+    for r in list(REJECTIONS):
+        r_actor = str(r.get("actor", "")).lower()
+        actor_name = accounts_map.get(r_actor, r.get("actor", "Desk 2"))
+        ts = r.get("time", int(time.time()))
+        dt_iso = (
+            datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).isoformat()
+            if isinstance(ts, (int, float))
+            else str(ts)
+        )
+        args = r.get("args", {})
+        aid = args.get("asset") if isinstance(args, dict) else None
+        oid = args.get("obligation") if isinstance(args, dict) else None
+        units = args.get("requested") if isinstance(args, dict) else None
+
+        formatted_rejections.append(
+            {
+                "type": "Rejected",
+                "block": r.get("block", current_block),
+                "tx_hash": "—",
+                "time": dt_iso,
+                "timestamp": ts if isinstance(ts, (int, float)) else 0,
+                "actor": actor_name,
+                "reason": r.get("reason", "Rejected"),
+                "asset_id": aid,
+                "obligation_id": oid,
+                "units": units,
+                "args": args,
+            }
+        )
+
     # Merge with rejection entries
-    combined = event_logs + list(REJECTIONS)
+    combined = event_logs + formatted_rejections
     # Sort newest first
-    combined.sort(key=lambda e: e.get("time", 0), reverse=True)
+    combined.sort(key=lambda e: e.get("timestamp", 0), reverse=True)
     return combined
 
 
