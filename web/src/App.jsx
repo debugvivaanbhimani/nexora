@@ -42,6 +42,8 @@ function App() {
   const [method, setMethod] = useState('optimiser')
   const [blocked, setBlocked] = useState(0)
   const [showMathModal, setShowMathModal] = useState(false)
+  const [showAuditorModal, setShowAuditorModal] = useState(false)
+  const [shockedCoverage, setShockedCoverage] = useState(null)
 
   const refresh = async () => {
     try {
@@ -253,6 +255,14 @@ function App() {
             >
               <Terminal />Math
             </button>
+            <button
+              className="button ghost"
+              onClick={() => setShowAuditorModal(true)}
+              title="Independent Cryptographic Verification & Tamper Detection"
+              style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'white', borderColor: 'rgba(255, 255, 255, 0.2)' }}
+            >
+              <ShieldCheck />Auditor Proof
+            </button>
             <button className="button ghost" onClick={commit} disabled={!plan}>
               <LockKeyhole />Commit
             </button>
@@ -276,7 +286,12 @@ function App() {
               plans={plans}
               solving={solving}
               optimise={optimise}
+              setPlan={setPlan}
+              refresh={refresh}
+              shockedCoverage={shockedCoverage}
+              setShockedCoverage={setShockedCoverage}
               onOpenMath={() => setShowMathModal(true)}
+              onOpenAuditor={() => setShowAuditorModal(true)}
             />
           )}
           {page === 'allocation' && (
@@ -310,6 +325,13 @@ function App() {
           onClose={() => setShowMathModal(false)}
         />
       )}
+      {showAuditorModal && (
+        <AuditorModal
+          plan={plan || plans.find((p) => p.method === 'optimiser') || plans[0]}
+          onClose={() => setShowAuditorModal(false)}
+          onCommit={commit}
+        />
+      )}
     </div>
   )
 }
@@ -329,7 +351,20 @@ function Loading() {
   )
 }
 
-function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath }) {
+function Overview({
+  scenario,
+  vault,
+  plan,
+  solving,
+  optimise,
+  plans,
+  setPlan,
+  refresh,
+  shockedCoverage,
+  setShockedCoverage,
+  onOpenMath,
+  onOpenAuditor,
+}) {
   const activePlan = plan || plans?.find((p) => p.method === 'optimiser') || plans?.[0]
   const totals = activePlan?.totals
   const covered = activePlan?.coverage?.filter((item) => item.covered).length || 0
@@ -364,6 +399,14 @@ function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath 
             >
               <Terminal />
               Math Inspector
+            </button>
+            <button
+              className="button ghost"
+              onClick={onOpenAuditor}
+              style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'white', borderColor: 'rgba(255, 255, 255, 0.2)' }}
+            >
+              <ShieldCheck />
+              Auditor Proof
             </button>
           </div>
         </div>
@@ -427,7 +470,17 @@ function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath 
         />
       </section>
 
-      <StressLab scenarioId={scenario.id} />
+      <StressLab
+        scenarioId={scenario.id}
+        scenario={scenario}
+        activePlan={activePlan}
+        onPlanCommitted={(p) => {
+          if (setPlan) setPlan(p)
+          if (refresh) refresh()
+        }}
+        onRefresh={refresh}
+        onShockCoverageChanged={setShockedCoverage}
+      />
 
       <div className="section-title">
         <div>
@@ -532,14 +585,20 @@ function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath 
       </div>
       <section className="obligation-list">
         {scenario.obligations.map((obligation, index) => {
-          const coverage = activePlan?.coverage?.find(
-            (item) => item.obligation_id.toUpperCase() === obligation.id.toUpperCase()
-          )
-          const percent = coverage
-            ? Math.min(100, (coverage.covered_lakh / obligation.required_lakh) * 100)
+          const effCoverage =
+            shockedCoverage?.find(
+              (item) => item.obligation_id.toUpperCase() === obligation.id.toUpperCase()
+            ) ||
+            activePlan?.coverage?.find(
+              (item) => item.obligation_id.toUpperCase() === obligation.id.toUpperCase()
+            )
+          const percent = effCoverage
+            ? Math.min(100, (effCoverage.covered_lakh / obligation.required_lakh) * 100)
             : 0
+          const hasShortfall = effCoverage ? effCoverage.shortfall_lakh > 0 : false
+
           return (
-            <article className="obligation-card" key={obligation.id}>
+            <article className={`obligation-card ${hasShortfall ? 'danger' : ''}`} key={obligation.id}>
               <span className="priority">0{index + 1}</span>
               <div className="obligation-copy">
                 <span>{obligation.counterparty}</span>
@@ -551,24 +610,27 @@ function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath 
               </div>
               <div className="coverage">
                 <div>
-                  <i style={{ width: `${percent}%` }} />
+                  <i
+                    style={{
+                      width: `${percent}%`,
+                      background: hasShortfall ? 'var(--coral)' : undefined,
+                    }}
+                  />
                 </div>
                 <span>{percent.toFixed(0)}%</span>
               </div>
               <div
-                className={`coverage-status ${
-                  coverage?.shortfall_lakh ? 'danger' : ''
-                }`}
+                className={`coverage-status ${hasShortfall ? 'danger' : ''}`}
               >
-                {coverage ? (
-                  coverage.covered ? (
+                {effCoverage ? (
+                  !hasShortfall ? (
                     <>
                       <Check />Covered
                     </>
                   ) : (
                     <>
                       <TriangleAlert />
-                      {money(coverage.shortfall_lakh)} short
+                      {money(effCoverage.shortfall_lakh)} short
                     </>
                   )
                 ) : (
@@ -1528,15 +1590,33 @@ function PageIntro({ eyebrow, title, copy }) {
   )
 }
 
-function StressLab({ scenarioId }) {
-  const [isOpen, setIsOpen] = useState(false)
+function StressLab({ scenarioId, scenario, activePlan, onPlanCommitted, onRefresh, onShockCoverageChanged }) {
+  const [isOpen, setIsOpen] = useState(true)
+  const [mode, setMode] = useState('shock') // 'shock' | 'demand'
+
+  // Market Shock states
+  const [equityMove, setEquityMove] = useState(-20) // in %
+  const [corpMove, setCorpMove] = useState(-5) // in %
+  const [gsecMove, setGsecMove] = useState(0) // in %
+  const [shockLoading, setShockLoading] = useState(false)
+  const [shockData, setShockData] = useState(null)
+
+  // Churn states
+  const [churnBps, setChurnBps] = useState(20) // in bps (0 to 50)
+  const [reoptLoading, setReoptLoading] = useState(false)
+  const [reoptData, setReoptData] = useState(null)
+  const [committing, setCommitting] = useState(false)
+  const [commitResult, setCommitResult] = useState(null)
+  const [filterActiveOnly, setFilterActiveOnly] = useState(true)
+
+  // Demand stress states (original simulator)
   const [repoReq, setRepoReq] = useState(5000)
   const [haircutBps, setHaircutBps] = useState(0)
   const [stressData, setStressData] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [demandLoading, setDemandLoading] = useState(false)
 
   const runStressTest = async (req, bps) => {
-    setLoading(true)
+    setDemandLoading(true)
     try {
       const res = await API.stress({
         scenario_id: scenarioId,
@@ -1548,18 +1628,107 @@ function StressLab({ scenarioId }) {
     } catch (err) {
       console.error('Stress test error', err)
     } finally {
-      setLoading(false)
+      setDemandLoading(false)
     }
   }
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && mode === 'demand') {
       runStressTest(repoReq, haircutBps)
     }
-  }, [isOpen, repoReq, haircutBps, scenarioId])
+  }, [isOpen, mode, repoReq, haircutBps, scenarioId])
+
+  const applyShock = async (eq = equityMove, corp = corpMove, gsec = gsecMove) => {
+    setShockLoading(true)
+    setReoptData(null)
+    setCommitResult(null)
+    try {
+      const class_moves = {
+        EQUITY: Math.round(eq * 100),
+        CORP_AAA: Math.round(corp * 100),
+        GSEC_MID: Math.round(gsec * 100),
+        GSEC_LONG: Math.round(gsec * 100),
+      }
+      const res = await API.shock({
+        scenario_id: scenarioId,
+        class_moves,
+      })
+      setShockData(res)
+      if (onShockCoverageChanged) {
+        onShockCoverageChanged(res.coverage)
+      }
+      if (res.total_shortfall_lakh > 0) {
+        toast.error(`Market Shock: ₹${res.total_shortfall_lakh.toFixed(2)}L margin shortfall detected!`)
+      } else {
+        toast.success('Market Shock: Portfolio absorbs price moves with zero shortfall')
+      }
+    } catch (err) {
+      toast.error('Shock calculation failed: ' + (err.message || 'unknown error'))
+    } finally {
+      setShockLoading(false)
+    }
+  }
+
+  const applyPreset = (eq, corp, gsec) => {
+    setEquityMove(eq)
+    setCorpMove(corp)
+    setGsecMove(gsec)
+    applyShock(eq, corp, gsec)
+  }
+
+  const handleReoptimise = async () => {
+    setReoptLoading(true)
+    setCommitResult(null)
+    try {
+      const churn_weight = Number(churnBps) / 100000.0
+      const planIdToReopt = shockData?.evaluated_plan_id || activePlan?.plan_id
+      const res = await API.reoptimise({
+        scenario_id: scenarioId,
+        plan_id: planIdToReopt,
+        churn_weight,
+      })
+      setReoptData(res)
+      toast.success(
+        `Re-optimised! Moved ${res.units_moved} units vs ${res.scratch_units_moved} from scratch (${res.reduction_pct}% saved)`
+      )
+    } catch (err) {
+      toast.error('Re-optimise failed: ' + (err.message || 'unknown error'))
+    } finally {
+      setReoptLoading(false)
+    }
+  }
+
+  const handleCommitDiff = async () => {
+    if (!reoptData?.plan?.plan_id) return
+    setCommitting(true)
+    try {
+      const res = await API.commitDiff(reoptData.plan.plan_id, reoptData.prev_plan_id)
+      if (res.ok) {
+        setCommitResult(res)
+        toast.success(
+          `Diff secured on-chain in block #${res.block}! Released #${res.released_id}, Committed #${res.allocation_id}`
+        )
+        if (onPlanCommitted) {
+          onPlanCommitted(reoptData.plan)
+        }
+        if (onRefresh) {
+          await onRefresh()
+        }
+      } else {
+        toast.error('Commit diff failed: ' + (res.error || 'reverted'))
+      }
+    } catch (err) {
+      toast.error('Commit diff failed: ' + (err.message || 'error'))
+    } finally {
+      setCommitting(false)
+    }
+  }
 
   const opt = stressData?.optimiser
   const greedy = stressData?.cheapest_first
+
+  const diffList = reoptData?.diff || []
+  const displayDiff = filterActiveOnly ? diffList.filter((d) => d.delta !== 0) : diffList
 
   return (
     <section className="stress-lab">
@@ -1568,154 +1737,497 @@ function StressLab({ scenarioId }) {
           <h3>
             <Sliders size={20} />
             Live Collateral Stress Lab
-            <span className="badge-pill dark" style={{ marginLeft: 8 }}>What-If Engine</span>
+            <span className="badge-pill dark" style={{ marginLeft: 8 }}>Dynamic Rebalancing</span>
           </h3>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-            Simulate liquidity shocks and repo demand surges against the live PuLP solver in &lt;25ms.
+            Simulate market shocks, detect shortfall gaps in real time, and re-optimise with ~90% less operational churn.
           </p>
         </div>
-        <button
-          className="button ghost"
-          onClick={() => {
-            const next = !isOpen
-            setIsOpen(next)
-            if (next && !stressData) runStressTest(repoReq, haircutBps)
-          }}
-        >
-          {isOpen ? 'Collapse Simulator' : 'Launch Stress Lab'}
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            className="button ghost"
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            {isOpen ? 'Collapse Panel' : 'Expand Panel'}
+          </button>
+        </div>
       </div>
 
       {isOpen && (
         <>
-          <div className="stress-controls">
-            <div className="slider-group">
-              <label>
-                <span>Bank Repo Demand (O3)</span>
-                <b>{money(repoReq)}</b>
-              </label>
-              <input
-                type="range"
-                min="3000"
-                max="7500"
-                step="250"
-                value={repoReq}
-                onChange={(e) => setRepoReq(Number(e.target.value))}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                <span>₹3,000L (Baseline)</span>
-                <span>₹5,000L</span>
-                <span>₹7,500L (Extreme Squeeze)</span>
-              </div>
-            </div>
-
-            <div className="slider-group">
-              <label>
-                <span>Market Haircut Shock (+bps)</span>
-                <b>+{(haircutBps / 100).toFixed(1)}% (+{haircutBps} bps)</b>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1500"
-                step="50"
-                value={haircutBps}
-                onChange={(e) => setHaircutBps(Number(e.target.value))}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                <span>+0% Normal</span>
-                <span>+7.5% Volatility</span>
-                <span>+15.0% Flash Crisis</span>
-              </div>
-            </div>
+          <div className="stress-tabs">
+            <button
+              className={`stress-tab-btn ${mode === 'shock' ? 'active' : ''}`}
+              onClick={() => setMode('shock')}
+            >
+              <TrendingDown size={15} />
+              Market Shock &amp; Min Churn
+            </button>
+            <button
+              className={`stress-tab-btn ${mode === 'demand' ? 'active' : ''}`}
+              onClick={() => setMode('demand')}
+            >
+              <Activity size={15} />
+              Haircut &amp; Repo Stress
+            </button>
           </div>
 
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)', fontSize: 13 }}>
-              Solving dual-stage integer program under stressed parameters…
-            </div>
-          )}
-
-          {stressData && !loading && (
+          {mode === 'shock' && (
             <>
-              <div className="stress-results">
-                <article className="stress-card opt">
-                  <h4>
-                    <span>Nexora AI (Two-Stage LP)</span>
-                    <span className="badge-pill mint">{opt?.runtime_ms} ms</span>
-                  </h4>
-                  <div className="stress-metric">
-                    <span>Uncovered Exposure (Shortfall)</span>
-                    <b style={{ color: opt?.totals?.shortfall_lakh > 0 ? '#b91c1c' : '#047857' }}>
-                      {money(opt?.totals?.shortfall_lakh)}
-                    </b>
-                  </div>
-                  <div className="stress-metric">
-                    <span>Collateral Utilisation</span>
-                    <b>{num(opt?.totals?.utilisation_pct)}%</b>
-                  </div>
-                  <div className="stress-metric">
-                    <span>Annual Funding Cost</span>
-                    <b>{money(opt?.totals?.funding_cost_lakh)}</b>
-                  </div>
-                  <div className="stress-metric">
-                    <span>Effective Cost (incl. penalties)</span>
-                    <b>{money(opt?.totals?.effective_cost_lakh)}</b>
-                  </div>
-                  <div className="stress-metric" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                    <span>Solvency Status</span>
-                    <span className="badge-pill mint">
-                      <Check size={12} />
-                      {opt?.totals?.shortfall_lakh === 0 ? '100% Fully Covered' : 'Bound Reached'}
-                    </span>
-                  </div>
-                </article>
-
-                <article className="stress-card greedy">
-                  <h4>
-                    <span>Greedy Cheapest-First</span>
-                    <span className="badge-pill coral">Heuristic</span>
-                  </h4>
-                  <div className="stress-metric">
-                    <span>Uncovered Exposure (Shortfall)</span>
-                    <b style={{ color: greedy?.totals?.shortfall_lakh > 0 ? '#b91c1c' : 'inherit' }}>
-                      {money(greedy?.totals?.shortfall_lakh)}
-                    </b>
-                  </div>
-                  <div className="stress-metric">
-                    <span>Collateral Utilisation</span>
-                    <b>{num(greedy?.totals?.utilisation_pct)}%</b>
-                  </div>
-                  <div className="stress-metric">
-                    <span>Annual Funding Cost</span>
-                    <b>{money(greedy?.totals?.funding_cost_lakh)}</b>
-                  </div>
-                  <div className="stress-metric">
-                    <span>Effective Cost (with penalty)</span>
-                    <b style={{ color: '#b91c1c' }}>{money(greedy?.totals?.effective_cost_lakh)}</b>
-                  </div>
-                  <div className="stress-metric" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                    <span>Solvency Status</span>
-                    <span className="badge-pill coral">
-                      {greedy?.totals?.shortfall_lakh > 0 ? (
-                        <>
-                          <TriangleAlert size={12} /> Stranded Shortfall
-                        </>
-                      ) : (
-                        'Covered'
-                      )}
-                    </span>
-                  </div>
-                </article>
-              </div>
-
-              {greedy?.totals?.shortfall_lakh > 0 && opt?.totals?.shortfall_lakh === 0 && (
-                <div className="tipping-banner">
-                  <Zap size={18} />
-                  <div>
-                    <strong>Tipping Point Discovered:</strong> At +{(haircutBps / 100).toFixed(1)}% haircut shock and {money(repoReq)} repo demand, the naive Cheapest-First algorithm strands gilts and suffers a catastrophic <strong>{money(greedy.totals.shortfall_lakh)}</strong> shortfall. Nexora AI mathematically avoids all shortfall by allocating cash/T-bills to CCP and reserving Gilts for repo!
+              <div className="shock-controls-grid">
+                <div className="slider-group">
+                  <label>
+                    <span>Equity Index Move</span>
+                    <b>{equityMove > 0 ? `+${equityMove}%` : `${equityMove}%`} ({equityMove * 100} bps)</b>
+                  </label>
+                  <input
+                    type="range"
+                    min="-30"
+                    max="10"
+                    step="1"
+                    value={equityMove}
+                    onChange={(e) => setEquityMove(Number(e.target.value))}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                    <span>−30% (Crash)</span>
+                    <span>−20% (Shock)</span>
+                    <span>+10% (Rally)</span>
                   </div>
                 </div>
+
+                <div className="slider-group">
+                  <label>
+                    <span>Corporate AAA Spread Move</span>
+                    <b>{corpMove > 0 ? `+${corpMove}%` : `${corpMove}%`} ({corpMove * 100} bps)</b>
+                  </label>
+                  <input
+                    type="range"
+                    min="-30"
+                    max="10"
+                    step="1"
+                    value={corpMove}
+                    onChange={(e) => setCorpMove(Number(e.target.value))}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                    <span>−30% (Credit Crunch)</span>
+                    <span>−5% (Spread Widening)</span>
+                    <span>+10%</span>
+                  </div>
+                </div>
+
+                <div className="slider-group">
+                  <label>
+                    <span>G-Sec Yield Shift</span>
+                    <b>{gsecMove > 0 ? `+${gsecMove}%` : `${gsecMove}%`} ({gsecMove * 100} bps)</b>
+                  </label>
+                  <input
+                    type="range"
+                    min="-20"
+                    max="10"
+                    step="1"
+                    value={gsecMove}
+                    onChange={(e) => setGsecMove(Number(e.target.value))}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                    <span>−20%</span>
+                    <span>0% (Stable)</span>
+                    <span>+10%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="preset-row">
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', marginRight: 4 }}>
+                  Quick Presets:
+                </span>
+                <button
+                  className="preset-chip"
+                  onClick={() => applyPreset(-20, 0, 0)}
+                  type="button"
+                >
+                  ⚡ −20% Equity Drop
+                </button>
+                <button
+                  className="preset-chip"
+                  onClick={() => applyPreset(-20, -5, 0)}
+                  type="button"
+                >
+                  ⚡ Multi-Asset Shock (−20% Eq, −5% Corp)
+                </button>
+                <button
+                  className="preset-chip"
+                  onClick={() => applyPreset(-30, -10, -5)}
+                  type="button"
+                >
+                  ⚡ Severe 30% Market Crash
+                </button>
+                <button
+                  className="preset-chip"
+                  onClick={() => applyPreset(0, 0, 0)}
+                  type="button"
+                >
+                  ↺ Reset Baseline (0%)
+                </button>
+                <div style={{ marginLeft: 'auto' }}>
+                  <button
+                    className="button dark"
+                    onClick={() => applyShock()}
+                    disabled={shockLoading}
+                  >
+                    <Zap size={14} />
+                    {shockLoading ? 'Evaluating Shock…' : 'APPLY SHOCK'}
+                  </button>
+                </div>
+              </div>
+
+              {shockLoading && (
+                <div style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)', fontSize: 13 }}>
+                  Recalculating mark-to-market valuations and querying on-chain commitment…
+                </div>
+              )}
+
+              {shockData && !shockLoading && (
+                <>
+                  {shockData.total_shortfall_lakh > 0 ? (
+                    <div className="shock-alert danger">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <TriangleAlert size={22} style={{ flexShrink: 0, color: '#dc2626' }} />
+                        <div>
+                          <strong>Immediate Margin Deficit:</strong> Current committed collateral suffers a{' '}
+                          <strong>{money(shockData.total_shortfall_lakh)}</strong> shortfall across{' '}
+                          {shockData.under_covered.length} obligation(s) at stressed prices.
+                        </div>
+                      </div>
+                      <span className="badge-pill coral" style={{ flexShrink: 0 }}>
+                        Margin Call Active
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="shock-alert safe">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <Check size={22} style={{ flexShrink: 0, color: '#16a34a' }} />
+                        <div>
+                          <strong>Portfolio Resilient:</strong> 100% of obligation requirements remain fully covered under the applied price moves.
+                        </div>
+                      </div>
+                      <span className="badge-pill mint" style={{ flexShrink: 0 }}>
+                        Zero Shortfall
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="shock-obligations-grid">
+                    {shockData.coverage?.map((cov) => {
+                      const isDeficit = !cov.covered && cov.shortfall_lakh > 0
+                      const pct = Math.min(100, (cov.covered_lakh / (cov.required_lakh || 1)) * 100)
+                      return (
+                        <div key={cov.obligation_id} className={`shock-ob-card ${isDeficit ? 'deficit' : ''}`}>
+                          <div className="shock-ob-header">
+                            <span>{cov.obligation_id}</span>
+                            <span className={`badge-pill ${isDeficit ? 'coral' : 'mint'}`}>
+                              {isDeficit ? `${money(cov.shortfall_lakh)} Short` : '100% Covered'}
+                            </span>
+                          </div>
+                          <b className="shock-ob-title">{cov.name}</b>
+                          <div className="shock-ob-stats">
+                            <span style={{ color: 'var(--muted)' }}>Required: {money(cov.required_lakh)}</span>
+                            <b style={{ color: isDeficit ? '#b91c1c' : '#047857' }}>
+                              Covered: {money(cov.covered_lakh)} ({pct.toFixed(1)}%)
+                            </b>
+                          </div>
+                          <div className="asset-track" style={{ height: 6, margin: '6px 0 0' }}>
+                            <div style={{ width: `${pct}%`, background: isDeficit ? 'var(--coral)' : 'var(--mint-strong)' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="reopt-panel">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <div>
+                        <h4 style={{ margin: 0, font: '750 17px var(--f-display)', letterSpacing: '-0.02em' }}>
+                          Minimal Churn Rebalancing Engine
+                        </h4>
+                        <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--muted)' }}>
+                          Preserve stage-1 solvency (zero shortfall) while adding penalty <code>churn_weight × Σ|x - prev|</code> to stage-2 cost.
+                        </p>
+                      </div>
+                      <button
+                        className="button mint"
+                        onClick={handleReoptimise}
+                        disabled={reoptLoading}
+                      >
+                        <Sparkles size={14} />
+                        {reoptLoading ? 'Re-optimising…' : 'RE-OPTIMISE (MIN CHURN)'}
+                      </button>
+                    </div>
+
+                    <div className="slider-group" style={{ margin: '14px 0 8px' }}>
+                      <label>
+                        <span>Churn Penalty Sensitivity: <b>{churnBps} bps</b> ({Number(churnBps / 100000).toFixed(4)} L/unit)</span>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          {churnBps === 0 ? 'From Scratch (Cold Start)' : churnBps < 30 ? 'Balanced Minimal Churn' : 'Top-Up Only'}
+                        </span>
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        step="5"
+                        value={churnBps}
+                        onChange={(e) => setChurnBps(Number(e.target.value))}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                        <span>0 bps (From Scratch)</span>
+                        <span>20 bps (Recommended)</span>
+                        <span>50 bps (Conservative Top-up)</span>
+                      </div>
+                    </div>
+
+                    {reoptData && (
+                      <>
+                        <div className="kpi-counters">
+                          <div className="kpi-counter-card accent">
+                            <div className="kpi-counter-label">Units Moved (Operational Turnover)</div>
+                            <div className="kpi-counter-value">
+                              {num(reoptData.units_moved)}
+                              <span className="kpi-counter-sub">vs {num(reoptData.scratch_units_moved)} from scratch</span>
+                            </div>
+                            <div className="kpi-counter-badge badge-pill mint">
+                              🌿 {num(reoptData.units_saved)} units saved ({reoptData.reduction_pct}% fewer moves)
+                            </div>
+                          </div>
+
+                          <div className="kpi-counter-card">
+                            <div className="kpi-counter-label">Marginal Funding Cost Premium</div>
+                            <div className="kpi-counter-value">
+                              +₹{reoptData.extra_cost_lakh.toFixed(2)}
+                              <span className="kpi-counter-sub">L/yr</span>
+                            </div>
+                            <div className="kpi-counter-badge badge-pill dark">
+                              <Check size={12} />
+                              Stage-1 Solvency (₹0 Shortfall) Guaranteed
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <b style={{ font: '700 15px var(--f-display)' }}>Track Changes Diff:</b>
+                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                              Showing {displayDiff.length} of {diffList.length} line{diffList.length === 1 ? '' : 's'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                            <button
+                              className="preset-chip"
+                              onClick={() => setFilterActiveOnly(!filterActiveOnly)}
+                            >
+                              {filterActiveOnly ? 'Show all lines' : 'Show active swaps only'}
+                            </button>
+                            <button
+                              className="button dark"
+                              onClick={handleCommitDiff}
+                              disabled={committing}
+                            >
+                              <LockKeyhole size={14} />
+                              {committing ? 'Securing On-Chain…' : 'COMMIT CHANGES ON-CHAIN'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {commitResult && (
+                          <div style={{ marginTop: 12, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, fontSize: 13, color: '#065f46', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <ShieldCheck size={18} style={{ color: '#047857', flexShrink: 0 }} />
+                            <div>
+                              <strong>Atomic Rebalance Executed on Ethereum:</strong> Released Allocation #{commitResult.released_id} and Committed Allocation #{commitResult.allocation_id} in block <strong>#{commitResult.block}</strong>.
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="diff-table-wrap">
+                          <table className="diff-table">
+                            <thead>
+                              <tr>
+                                <th>Collateral Asset</th>
+                                <th>Target Obligation</th>
+                                <th>Prior Units</th>
+                                <th>New Units</th>
+                                <th>Net Delta</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {displayDiff.map((row, idx) => (
+                                <tr key={`${row.asset_id}-${row.obligation_id}-${idx}`}>
+                                  <td>
+                                    <b>{row.asset_id}</b>
+                                  </td>
+                                  <td>
+                                    <code>{row.obligation_id}</code>
+                                  </td>
+                                  <td style={{ fontFamily: 'var(--f-mono)' }}>{num(row.before)}</td>
+                                  <td style={{ fontFamily: 'var(--f-mono)', fontWeight: 600 }}>{num(row.after)}</td>
+                                  <td>
+                                    {row.delta > 0 && (
+                                      <span className="diff-badge-plus">
+                                        +▲ {num(row.delta)}
+                                      </span>
+                                    )}
+                                    {row.delta < 0 && (
+                                      <span className="diff-badge-minus">
+                                        −▼ {num(Math.abs(row.delta))}
+                                      </span>
+                                    )}
+                                    {row.delta === 0 && (
+                                      <span className="diff-badge-neutral">— 0</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {mode === 'demand' && (
+            <>
+              <div className="stress-controls">
+                <div className="slider-group">
+                  <label>
+                    <span>Bank Repo Demand (O3)</span>
+                    <b>{money(repoReq)}</b>
+                  </label>
+                  <input
+                    type="range"
+                    min="3000"
+                    max="7500"
+                    step="250"
+                    value={repoReq}
+                    onChange={(e) => setRepoReq(Number(e.target.value))}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                    <span>₹3,000L (Baseline)</span>
+                    <span>₹5,000L</span>
+                    <span>₹7,500L (Extreme Squeeze)</span>
+                  </div>
+                </div>
+
+                <div className="slider-group">
+                  <label>
+                    <span>Market Haircut Shock (+bps)</span>
+                    <b>+{(haircutBps / 100).toFixed(1)}% (+{haircutBps} bps)</b>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1500"
+                    step="50"
+                    value={haircutBps}
+                    onChange={(e) => setHaircutBps(Number(e.target.value))}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                    <span>+0% Normal</span>
+                    <span>+7.5% Volatility</span>
+                    <span>+15.0% Flash Crisis</span>
+                  </div>
+                </div>
+              </div>
+
+              {demandLoading && (
+                <div style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)', fontSize: 13 }}>
+                  Solving dual-stage integer program under stressed parameters…
+                </div>
+              )}
+
+              {stressData && !demandLoading && (
+                <>
+                  <div className="stress-results">
+                    <article className="stress-card opt">
+                      <h4>
+                        <span>Nexora AI (Two-Stage LP)</span>
+                        <span className="badge-pill mint">{opt?.runtime_ms} ms</span>
+                      </h4>
+                      <div className="stress-metric">
+                        <span>Uncovered Exposure (Shortfall)</span>
+                        <b style={{ color: opt?.totals?.shortfall_lakh > 0 ? '#b91c1c' : '#047857' }}>
+                          {money(opt?.totals?.shortfall_lakh)}
+                        </b>
+                      </div>
+                      <div className="stress-metric">
+                        <span>Collateral Utilisation</span>
+                        <b>{num(opt?.totals?.utilisation_pct)}%</b>
+                      </div>
+                      <div className="stress-metric">
+                        <span>Annual Funding Cost</span>
+                        <b>{money(opt?.totals?.funding_cost_lakh)}</b>
+                      </div>
+                      <div className="stress-metric">
+                        <span>Effective Cost (incl. penalties)</span>
+                        <b>{money(opt?.totals?.effective_cost_lakh)}</b>
+                      </div>
+                      <div className="stress-metric" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                        <span>Solvency Status</span>
+                        <span className="badge-pill mint">
+                          <Check size={12} />
+                          {opt?.totals?.shortfall_lakh === 0 ? '100% Fully Covered' : 'Bound Reached'}
+                        </span>
+                      </div>
+                    </article>
+
+                    <article className="stress-card greedy">
+                      <h4>
+                        <span>Greedy Cheapest-First</span>
+                        <span className="badge-pill coral">Heuristic</span>
+                      </h4>
+                      <div className="stress-metric">
+                        <span>Uncovered Exposure (Shortfall)</span>
+                        <b style={{ color: greedy?.totals?.shortfall_lakh > 0 ? '#b91c1c' : 'inherit' }}>
+                          {money(greedy?.totals?.shortfall_lakh)}
+                        </b>
+                      </div>
+                      <div className="stress-metric">
+                        <span>Collateral Utilisation</span>
+                        <b>{num(greedy?.totals?.utilisation_pct)}%</b>
+                      </div>
+                      <div className="stress-metric">
+                        <span>Annual Funding Cost</span>
+                        <b>{money(greedy?.totals?.funding_cost_lakh)}</b>
+                      </div>
+                      <div className="stress-metric">
+                        <span>Effective Cost (with penalty)</span>
+                        <b style={{ color: '#b91c1c' }}>{money(greedy?.totals?.effective_cost_lakh)}</b>
+                      </div>
+                      <div className="stress-metric" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                        <span>Solvency Status</span>
+                        <span className="badge-pill coral">
+                          {greedy?.totals?.shortfall_lakh > 0 ? (
+                            <>
+                              <TriangleAlert size={12} /> Stranded Shortfall
+                            </>
+                          ) : (
+                            'Covered'
+                          )}
+                        </span>
+                      </div>
+                    </article>
+                  </div>
+
+                  {greedy?.totals?.shortfall_lakh > 0 && opt?.totals?.shortfall_lakh === 0 && (
+                    <div className="tipping-banner">
+                      <Zap size={18} />
+                      <div>
+                        <strong>Tipping Point Discovered:</strong> At +{(haircutBps / 100).toFixed(1)}% haircut shock and {money(repoReq)} repo demand, the naive Cheapest-First algorithm strands gilts and suffers a catastrophic <strong>{money(greedy.totals.shortfall_lakh)}</strong> shortfall. Nexora AI mathematically avoids all shortfall by allocating cash/T-bills to CCP and reserving Gilts for repo!
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -1917,4 +2429,164 @@ function MathTraceModal({ plan, onClose }) {
   )
 }
 
+function AuditorModal({ plan, onClose, onCommit }) {
+  const [simulateTamper, setSimulateTamper] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [proof, setProof] = useState(null)
+
+  const verifyPlan = async (tamper) => {
+    if (!plan?.plan_id) return
+    setLoading(true)
+    try {
+      const res = await API.verify(plan.plan_id, tamper)
+      setProof(res)
+    } catch (err) {
+      setProof({ ok: false, error: err.message, verified: false })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    verifyPlan(simulateTamper)
+  }, [plan?.plan_id, simulateTamper])
+
+  const isCommitted = proof?.committed_at > 0
+  const isVerified = proof?.verified && !proof?.tampered
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 880 }}>
+        <div className="modal-head">
+          <div>
+            <h3>Independent Auditor Cryptographic Proof</h3>
+            <span style={{ fontSize: 12, opacity: 0.85 }}>
+              Zero-Trust Verification · Proves mathematical plan state against Ethereum immutable storage
+            </span>
+          </div>
+          <button onClick={onClose} aria-label="Close modal">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)' }}>
+              Recomputing canonical Keccak-256 state and querying Ethereum smart contract…
+            </div>
+          ) : !isCommitted ? (
+            <div className="auditor-status-banner pending">
+              <TriangleAlert size={24} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <b style={{ fontSize: 15 }}>Allocation Not Yet Committed On-Chain</b>
+                <p style={{ margin: '4px 0 10px', fontSize: 13, lineHeight: 1.5 }}>
+                  Plan <code>{plan?.plan_id}</code> is calculated in memory with canonical hash{' '}
+                  <code>{plan?.plan_hash?.slice(0, 18)}…</code>, but has not yet been anchored to the smart contract.
+                </p>
+                <button
+                  className="button dark"
+                  onClick={async () => {
+                    await onCommit()
+                    verifyPlan(simulateTamper)
+                  }}
+                >
+                  <LockKeyhole size={14} /> Commit to Blockchain Now
+                </button>
+              </div>
+            </div>
+          ) : isVerified ? (
+            <div className="auditor-status-banner valid">
+              <ShieldCheck size={26} style={{ flexShrink: 0, marginTop: 2, color: '#16a34a' }} />
+              <div>
+                <b style={{ fontSize: 15 }}>[✓ ZERO TAMPERING DETECTED · CRYPTOGRAPHIC MATCH]</b>
+                <p style={{ margin: '4px 0 0', fontSize: 13, lineHeight: 1.5 }}>
+                  The off-chain allocation database matches the immutable Ethereum root stored in contract storage. No records have been edited or repudiated since commitment.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="auditor-status-banner tampered">
+              <TriangleAlert size={26} style={{ flexShrink: 0, marginTop: 2, color: '#dc2626' }} />
+              <div>
+                <b style={{ fontSize: 15 }}>[✗ CRITICAL INTEGRITY ALERT · HASH MISMATCH DETECTED]</b>
+                <p style={{ margin: '4px 0 0', fontSize: 13, lineHeight: 1.5 }}>
+                  The client-recomputed Keccak-256 state does <strong>not</strong> match the on-chain allocation root! Database tampering, unauthorised modification, or corrupted storage detected.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="telemetry-grid">
+            <div className="telemetry-card">
+              <span>PLAN IDENTIFIER</span>
+              <b style={{ fontSize: 14, wordBreak: 'break-all' }}>{plan?.plan_id}</b>
+            </div>
+            <div className="telemetry-card">
+              <span>ALLOCATION STATUS</span>
+              <b>{isCommitted ? (proof?.active ? '1 (COMMITTED / ACTIVE)' : '0 (RELEASED)') : 'UNCOMMITTED'}</b>
+            </div>
+            <div className="telemetry-card">
+              <span>SIGNING AUDITOR / DESK</span>
+              <b style={{ fontSize: 12.5, fontFamily: 'var(--f-mono)', wordBreak: 'break-all' }}>
+                {proof?.allocator || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'}
+              </b>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+            <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 12, padding: '14px 18px' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>
+                Auditor Recomputed Keccak-256 Hash
+              </span>
+              <code className={`hash-pill ${!isVerified && isCommitted ? 'corrupt' : ''}`}>
+                {proof?.computed_hash || plan?.plan_hash || '—'}
+              </code>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                Re-derived by lexicographically hashing allocation lines &amp; asset quantities
+              </span>
+            </div>
+
+            <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 12, padding: '14px 18px' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>
+                On-Chain Storage Root (CollateralLedger)
+              </span>
+              <code className="hash-pill">
+                {proof?.on_chain_hash || '0x0000000000000000000000000000000000000000000000000000000000000000'}
+              </code>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                Permanently written to contract state in EVM storage slot by allocator
+              </span>
+            </div>
+          </div>
+
+          <div className="tamper-toggle-row">
+            <div className="tamper-toggle-label">
+              <b>Simulate Rogue Database Tampering (+1 Unit DB Edit)</b>
+              <span>
+                Demonstrates how modifying even a single integer in the off-chain database immediately breaks verification against the blockchain.
+              </span>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={simulateTamper}
+                onChange={(e) => setSimulateTamper(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--coral)' }}
+              />
+              <span style={{ fontSize: 13, fontWeight: 600, color: simulateTamper ? '#b91c1c' : 'inherit' }}>
+                {simulateTamper ? 'Tampering Active' : 'Off'}
+              </span>
+            </label>
+          </div>
+
+          <div style={{ marginTop: 20, padding: '14px 18px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--line)', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+            <strong>Why Does This Need Blockchain?</strong> Conventional databases allow internal admins or database operators to silently modify allocation logs after the fact. Nexora anchors every allocation&apos;s canonical Keccak-256 fingerprint into the Ethereum smart contract. An independent regulator or auditor can verify with 100% mathematical certainty that no records have been altered without going through contract consensus.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default App
+

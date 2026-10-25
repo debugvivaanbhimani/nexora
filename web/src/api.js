@@ -266,3 +266,11 @@ export const getEvents = () => api('/events');
 export const attack = (type) => api('/attack', { type });
 
 export const stress = (params) => api('/stress', params);
+
+export const shock = (params) => api('/shock', params);
+
+export const reoptimise = (params) => api('/reoptimise', params);
+
+export const commitDiff = (plan_id, old_plan_id) => api('/commit-diff', { plan_id, old_plan_id });
+
+export const verify = (plan_id, simulate_tamper = false) => api('/verify', { plan_id, simulate_tamper });

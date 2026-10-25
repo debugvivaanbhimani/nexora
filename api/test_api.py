@@ -92,3 +92,58 @@ def test_api_full_workflow_and_attacks():
     assert "Reserved" in types
     assert "AllocationCommitted" in types
     assert "Rejected" in types
+
+
+def test_market_shock_reoptimise_and_verify():
+    """Test market price shock, churn-minimizing reoptimisation, commit-diff, and auditor proof."""
+    # 1. Reset
+    client.post("/reset", json={"scenario_id": "ref"})
+
+    # 2. Optimise baseline & commit
+    opt = client.post("/optimise", json={"scenario_id": "ref"}).json()
+    base_id = opt["plan_id"]
+    cmt = client.post("/commit", json={"plan_id": base_id}).json()
+    assert cmt["ok"] is True
+
+    # 3. Auditor verification before shock
+    ver = client.post("/verify", json={"plan_id": base_id}).json()
+    assert ver["ok"] is True
+    assert ver["verified"] is True
+    assert ver["tampered"] is False
+
+    # 4. Tamper detection test
+    tamper = client.post("/verify", json={"plan_id": base_id, "simulate_tamper": True}).json()
+    assert tamper["ok"] is True
+    assert tamper["tampered"] is True
+    assert tamper["verified"] is False
+
+    # 5. Apply market price shock (-20% Equity, -5% Corp AAA)
+    shock = client.post(
+        "/shock",
+        json={"scenario_id": "ref", "class_moves": {"EQUITY": -2000, "CORP_AAA": -500}},
+    ).json()
+    assert shock["total_shortfall_lakh"] > 0
+    assert len(shock["under_covered"]) >= 1
+
+    # 6. Re-optimise with churn minimization
+    reopt = client.post(
+        "/reoptimise",
+        json={"scenario_id": "ref", "plan_id": base_id, "churn_weight": 0.0002},
+    ).json()
+    new_plan = reopt["plan"]
+    assert new_plan["plan_id"] != base_id
+    assert new_plan["totals"]["shortfall_lakh"] == 0 or new_plan["totals"]["shortfall_lakh"] < shock["total_shortfall_lakh"]
+    assert reopt["units_moved"] <= reopt["scratch_units_moved"]
+    assert len(reopt["diff"]) > 0
+
+    # 7. Commit diff on-chain
+    diff_res = client.post("/commit-diff", json={"plan_id": new_plan["plan_id"]}).json()
+    assert diff_res["ok"] is True
+    assert diff_res["released_plan_id"] == base_id
+
+    # 8. Auditor verification of re-optimised plan
+    ver2 = client.post("/verify", json={"plan_id": new_plan["plan_id"]}).json()
+    assert ver2["ok"] is True
+    assert ver2["verified"] is True
+    assert ver2["tampered"] is False
+

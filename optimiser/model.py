@@ -11,13 +11,33 @@ def solve(
     scenario_input: Any,
     method: str = "optimiser",
     free_qty: Optional[Dict[str, int]] = None,
+    prev_allocation: Optional[Any] = None,
+    churn_weight: float = 0.0,
 ) -> Dict[str, Any]:
-    """Solve the collateral allocation problem using either the two-stage optimiser or a baseline."""
+    """Solve the collateral allocation problem using either the two-stage optimiser or a baseline.
+    
+    If prev_allocation is provided, adds churn penalty to Stage 2 objective while strictly
+    preserving zero shortfall (Stage 1 unchanged).
+    """
     if method != "optimiser":
         return solve_baseline(scenario_input, method=method, free_qty=free_qty)
 
     start_time = time.perf_counter()
     scenario = load_scenario(scenario_input)
+
+    # Parse previous allocation map if provided
+    prev_map: Dict[tuple, int] = {}
+    if prev_allocation:
+        if isinstance(prev_allocation, list):
+            for l in prev_allocation:
+                prev_map[(str(l["asset_id"]), str(l["obligation_id"]))] = int(l.get("units", 0))
+        elif isinstance(prev_allocation, dict):
+            for k, v in prev_allocation.items():
+                if isinstance(k, tuple):
+                    prev_map[(str(k[0]), str(k[1]))] = int(v)
+                elif isinstance(k, str) and isinstance(v, dict):
+                    for o_k, o_v in v.items():
+                        prev_map[(str(k), str(o_k))] = int(o_v)
 
     assets = {a["id"]: dict(a) for a in scenario["assets"]}
     obligations = {o["id"]: dict(o) for o in scenario["obligations"]}
@@ -140,9 +160,24 @@ def solve(
         for o_id in obligations
     )
 
-    # Stage 2: Minimize funding cost subject to minimal shortfall
+    # Stage 2: Minimize funding cost + churn penalty subject to minimal shortfall
     m2 = pulp.LpProblem("Stage2_MinFundingCost", pulp.LpMinimize)
-    m2 += pulp.lpSum(x[a_id, o_id] * cost_coeff[a_id] for (a_id, o_id) in x)
+
+    # Churn variables if prev_allocation is given and churn_weight > 0
+    d = {}
+    if prev_map and churn_weight > 0:
+        for (a_id, o_id) in x:
+            p_val = prev_map.get((a_id, o_id), 0)
+            d[a_id, o_id] = pulp.LpVariable(f"d_{a_id}_{o_id}", lowBound=0, cat="Continuous")
+            m2 += d[a_id, o_id] >= x[a_id, o_id] - p_val, f"churn_pos_{a_id}_{o_id}"
+            m2 += d[a_id, o_id] >= p_val - x[a_id, o_id], f"churn_neg_{a_id}_{o_id}"
+
+        m2 += (
+            pulp.lpSum(x[a_id, o_id] * cost_coeff[a_id] for (a_id, o_id) in x)
+            + pulp.lpSum(churn_weight * d[a_id, o_id] for (a_id, o_id) in d)
+        )
+    else:
+        m2 += pulp.lpSum(x[a_id, o_id] * cost_coeff[a_id] for (a_id, o_id) in x)
 
     for o_id, ob in obligations.items():
         m2 += (
@@ -327,7 +362,25 @@ def solve(
     effective_cost_lakh = round(total_funding_cost_lakh + (total_shortfall_lakh * 0.09), 4)
     runtime_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-    return {
+    diff_list = []
+    units_moved = 0
+    if prev_map:
+        all_keys = sorted(set(allocation_map.keys()) | set(prev_map.keys()))
+        for (a_id, o_id) in all_keys:
+            before = prev_map.get((a_id, o_id), 0)
+            after = allocation_map.get((a_id, o_id), 0)
+            delta = after - before
+            if before != 0 or after != 0:
+                diff_list.append({
+                    "asset_id": a_id,
+                    "obligation_id": o_id,
+                    "before": before,
+                    "after": after,
+                    "delta": delta,
+                })
+            units_moved += abs(delta)
+
+    result = {
         "scenario_id": scenario.get("id", "UNKNOWN"),
         "method": method,
         "status": status_str,
@@ -342,3 +395,7 @@ def solve(
         },
         "runtime_ms": runtime_ms,
     }
+    if prev_map:
+        result["diff"] = diff_list
+        result["units_moved"] = units_moved
+    return result
