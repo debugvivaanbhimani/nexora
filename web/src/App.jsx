@@ -184,7 +184,7 @@ function App() {
     <div className="shell">
       <aside className="sidebar">
         <div className="logo">
-          <span><Fingerprint /></span>
+          <img src="/nexora-logo.png" alt="Nexora emblem" className="logo-img" />
           <div>
             <b>Nexora</b>
             <small>Collateral management</small>
