@@ -18,6 +18,15 @@ const methodNames = {
 const money = value => `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value || 0)}`
 const num = value => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value || 0)
 
+const ASSET_COLORS = {
+  CASH: '#2a78d6',
+  TBILL_91D: '#eb6834',
+  GSEC_2029: '#1baf7a',
+  GSEC_2034: '#eda100',
+  CORP_AAA_2028: '#e87ba4',
+  NIFTY50_BASKET: '#6250d6',
+}
+
 function App() {
   const [page, setPage] = useState('overview')
   const [scenarios, setScenarios] = useState([])
@@ -395,26 +404,23 @@ function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath 
 
       <section className="metric-row">
         <Metric
-          icon={CircleDollarSign}
           label="Annual funding cost"
           value={activePlan ? money(totals?.funding_cost_lakh) : '—'}
-          note="₹ lakh per annum"
+          note="₹ lakh per annum · optimal run-rate"
           color="plum"
         />
         <Metric
-          icon={TrendingDown}
           label="Effective cost"
           value={activePlan ? money(totals?.effective_cost_lakh) : '—'}
-          note="includes shortfall penalty"
+          note="includes shortfall penalty & carry"
           color="blue"
         />
         <Metric
-          icon={ShieldCheck}
           label="Uncovered exposure"
           value={activePlan ? money(totals?.shortfall_lakh) : '—'}
           note={
             activePlan && !totals?.shortfall_lakh
-              ? 'Fully collateralised'
+              ? '100% collateralised · 0 gap'
               : 'awaiting allocation'
           }
           color={activePlan && !totals?.shortfall_lakh ? 'green' : 'orange'}
@@ -441,32 +447,75 @@ function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath 
             version: 1,
           }
           const reserved = item.total ? (item.reserved / item.total) * 100 : 0
+          const assetColor = ASSET_COLORS[asset.id] || '#1baf7a'
+
           return (
-            <article className="asset" key={asset.id}>
-              <div className={`asset-mark mark-${index % 6}`}>
-                {asset.id === 'CASH' ? '₹' : asset.class.slice(0, 2)}
+            <article className="asset" key={asset.id} style={{ '--asset-accent': assetColor }}>
+              <div className="asset-top-row">
+                <span
+                  className="asset-pill-ticker"
+                  style={{
+                    color: assetColor,
+                    background: `${assetColor}15`,
+                    borderColor: `${assetColor}35`,
+                  }}
+                >
+                  {asset.id.replace('_', ' ')}
+                </span>
+                <span className="asset-ver-chip">v{item.version} ledger</span>
               </div>
-              <div className="asset-head">
-                <div>
-                  <b>{asset.name}</b>
-                  <span>{asset.class.replace('_', ' ')}</span>
-                </div>
-                <small>v{item.version}</small>
+
+              <div className="asset-info-block">
+                <b className="asset-primary-title" title={asset.name}>
+                  {asset.name}
+                </b>
+                <span className="asset-sub-class">
+                  {asset.class.replace('_', ' ')} · {asset.funding_cost_bps} bps
+                </span>
               </div>
-              <div className="asset-value">
-                {num(item.available)}
-                <span> / {num(item.total)} units</span>
+
+              {/* Dynamic SVG capacity profile graphic */}
+              <div className="asset-visual-wrap">
+                <svg className="asset-wave-graphic" viewBox="0 0 120 28" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id={`asset-grad-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={assetColor} stopOpacity="0.32" />
+                      <stop offset="100%" stopColor={assetColor} stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={`M 0 ${22 - (index % 3) * 3} Q 30 ${10 - (index % 2) * 4}, 60 ${16 - (index % 3) * 2} T 120 ${8 + (index % 3) * 2} L 120 28 L 0 28 Z`}
+                    fill={`url(#asset-grad-${asset.id})`}
+                  />
+                  <path
+                    d={`M 0 ${22 - (index % 3) * 3} Q 30 ${10 - (index % 2) * 4}, 60 ${16 - (index % 3) * 2} T 120 ${8 + (index % 3) * 2}`}
+                    stroke={assetColor}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                </svg>
               </div>
+
+              <div className="asset-metric-row">
+                <strong className="asset-huge-qty">{num(item.available)}</strong>
+                <span className="asset-total-units">/ {num(item.total)} units</span>
+              </div>
+
               <div className="progress">
-                <i style={{ width: `${reserved}%` }} />
+                <i style={{ width: `${reserved}%`, background: assetColor }} />
               </div>
+
               <div className="asset-foot">
-                <span>{reserved.toFixed(0)}% reserved</span>
-                <span>{asset.funding_cost_bps} bps cost</span>
+                <span style={{ color: reserved > 80 ? 'var(--coral)' : 'var(--muted)', fontWeight: 600 }}>
+                  {reserved.toFixed(0)}% pledged
+                </span>
+                <span>{num(item.reserved)} used</span>
               </div>
+
               {item.available === 0 && (
                 <div className="locked">
-                  <LockKeyhole />Fully allocated
+                  <LockKeyhole size={14} /> Fully allocated
                 </div>
               )}
             </article>
@@ -534,28 +583,70 @@ function Overview({ scenario, vault, plan, solving, optimise, plans, onOpenMath 
   )
 }
 
-function Metric({ icon: Icon, label, value, note, color }) {
+function Metric({ label, value, note, color }) {
+  const renderSparkline = () => {
+    if (color === 'plum') {
+      return (
+        <svg className="metric-sparkline" viewBox="0 0 80 24" fill="none">
+          <defs>
+            <linearGradient id="metric-grad-plum" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#8d5b88" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#8d5b88" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+          <path d="M 0 18 Q 20 16, 40 10 T 80 4 L 80 24 L 0 24 Z" fill="url(#metric-grad-plum)" />
+          <path d="M 0 18 Q 20 16, 40 10 T 80 4" stroke="#8d5b88" strokeWidth="2.2" strokeLinecap="round" />
+          <circle cx="80" cy="4" r="3" fill="#8d5b88" />
+        </svg>
+      )
+    }
+    if (color === 'blue') {
+      return (
+        <svg className="metric-sparkline" viewBox="0 0 80 24" fill="none">
+          <defs>
+            <linearGradient id="metric-grad-blue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2a78d6" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#2a78d6" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+          <path d="M 0 4 Q 25 4, 50 14 T 80 20 L 80 24 L 0 24 Z" fill="url(#metric-grad-blue)" />
+          <path d="M 0 4 Q 25 4, 50 14 T 80 20" stroke="#2a78d6" strokeWidth="2.2" strokeLinecap="round" />
+          <circle cx="80" cy="20" r="3" fill="#2a78d6" />
+        </svg>
+      )
+    }
+    const isGreen = color === 'green'
+    const strokeColor = isGreen ? '#1baf7a' : '#eb6834'
+    return (
+      <svg className="metric-sparkline" viewBox="0 0 80 24" fill="none">
+        <defs>
+          <linearGradient id="metric-grad-gap" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={strokeColor} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={strokeColor} stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+        <path d="M 0 20 Q 30 20, 55 12 T 80 8 L 80 24 L 0 24 Z" fill="url(#metric-grad-gap)" />
+        <path d="M 0 20 Q 30 20, 55 12 T 80 8" stroke={strokeColor} strokeWidth="2.2" strokeLinecap="round" />
+        <circle cx="80" cy="8" r="3" fill={strokeColor} />
+      </svg>
+    )
+  }
+
   return (
-    <article className="metric">
-      <span className={`metric-icon ${color}`}>
-        <Icon />
-      </span>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{note}</small>
+    <article className={`metric metric-${color}`}>
+      <div className="metric-header-row">
+        <div className="metric-label-group">
+          <span className={`metric-badge-dot dot-${color}`} />
+          <span className="metric-label-text">{label}</span>
+        </div>
+        {renderSparkline()}
+      </div>
+      <strong className="metric-main-value">{value}</strong>
+      <div className="metric-footer-note">
+        <span>{note}</span>
       </div>
     </article>
   )
-}
-
-const ASSET_COLORS = {
-  CASH: '#2a78d6',
-  TBILL_91D: '#eb6834',
-  GSEC_2029: '#1baf7a',
-  GSEC_2034: '#eda100',
-  CORP_AAA_2028: '#e87ba4',
-  NIFTY50_BASKET: '#6250d6',
 }
 
 const ASSET_META = {
@@ -922,11 +1013,10 @@ function Compare({ plans }) {
         copy="A lower initial funding cost does not always produce the lowest-cost complete plan. Review each method against coverage and utilisation."
       />
       <section className="insight">
-        <span>
-          <Sparkles />
-        </span>
         <div>
-          <small>Recommended outcome</small>
+          <span className="badge-pill dark" style={{ marginBottom: 10, display: 'inline-flex' }}>
+            RECOMMENDED ALLOCATION STRATEGY
+          </span>
           <h3>
             The optimiser covers every obligation for {money(optPlan?.totals?.funding_cost_lakh || 275.97)}.
           </h3>
@@ -1349,18 +1439,18 @@ function Ledger({ events, plan }) {
         copy="Review every reservation, commitment and rejected attempt in a human-readable audit trail."
       />
       <section className="ledger-summary">
-        <div>
-          <span className="ledger-icon">
-            <Database />
-          </span>
-          <div>
-            <small>LATEST SEALED PLAN</small>
+        <div className="ledger-summary-left">
+          <div className="ledger-status-tag">
+            <span className="chain-pulse-dot" />
+            <span>HARDHAT EVM · BLOCK #12</span>
+          </div>
+          <div className="ledger-hash-row">
+            <small>LATEST SEALED PLAN ROOT</small>
             <b>{shortSeal}</b>
-            <span>Block 12 · Hardhat localnet</span>
           </div>
         </div>
-        <button onClick={copy}>
-          <Copy />Copy hash
+        <button className="button ghost" onClick={copy} style={{ color: 'white', borderColor: 'rgba(255,255,255,0.2)' }}>
+          <Copy size={16} />Copy hash
         </button>
       </section>
       {events?.length ? (
