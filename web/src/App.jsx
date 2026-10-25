@@ -207,7 +207,7 @@ function App() {
         </nav>
         <div className="sidebar-foot">
           <div className="mini-user">NX</div>
-          <div>
+          <div className="sidebar-foot-info">
             <b>Innovise Bank</b>
             <small>Risk operations</small>
           </div>
@@ -217,16 +217,9 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <span className="breadcrumb">India portfolio&nbsp;&nbsp;/&nbsp;&nbsp;{selectedScenarioId.toUpperCase()}-01</span>
             <h1>{pages.find((item) => item[0] === page)?.[2]}</h1>
           </div>
           <div className="actions">
-            <div className="network-status">
-              <i />
-              {health?.ok
-                ? `Network live · #${health.block}`
-                : 'Network offline'}
-            </div>
             <select
               aria-label="Scenario"
               value={selectedScenarioId}
@@ -1737,7 +1730,6 @@ function StressLab({ scenarioId, scenario, activePlan, onPlanCommitted, onRefres
           <h3>
             <Sliders size={20} />
             Live Collateral Stress Lab
-            <span className="badge-pill dark" style={{ marginLeft: 8 }}>Dynamic Rebalancing</span>
           </h3>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
             Simulate market shocks, detect shortfall gaps in real time, and re-optimise with ~90% less operational churn.
