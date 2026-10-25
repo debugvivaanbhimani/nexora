@@ -1,0 +1,10 @@
+{
+  "description": "Helps bank treasury teams optimise collateral across obligations, prevent double-pledging, and track secure blockchain-backed allocations.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
