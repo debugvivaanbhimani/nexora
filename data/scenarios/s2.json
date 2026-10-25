@@ -1,0 +1,74 @@
+{
+  "id": "S2",
+  "name": "S1 with enlarged obligation Y",
+  "description": "Variant of Scenario 1 where obligation Y requires 9000 lakh, testing capacity stress and shortfall dynamics.",
+  "assets": [
+    {
+      "id": "CASH",
+      "name": "Cash Reserve",
+      "class": "CASH",
+      "quantity": 3000,
+      "price_bps": 10000,
+      "funding_cost_bps": 300
+    },
+    {
+      "id": "GSEC1",
+      "name": "Government Security 1",
+      "class": "GSEC",
+      "quantity": 5000,
+      "price_bps": 10000,
+      "funding_cost_bps": 150
+    },
+    {
+      "id": "CORP1",
+      "name": "Corporate Bond 1",
+      "class": "CORP",
+      "quantity": 4500,
+      "price_bps": 10000,
+      "funding_cost_bps": 80
+    }
+  ],
+  "obligations": [
+    {
+      "id": "X",
+      "name": "Obligation X",
+      "counterparty": "Counterparty X",
+      "required_lakh": 5000,
+      "priority": 1
+    },
+    {
+      "id": "Y",
+      "name": "Obligation Y",
+      "counterparty": "Counterparty Y",
+      "required_lakh": 9000,
+      "priority": 2
+    }
+  ],
+  "rules": [
+    {
+      "obligation_id": "X",
+      "class": "CASH",
+      "haircut_bps": 0
+    },
+    {
+      "obligation_id": "X",
+      "class": "GSEC",
+      "haircut_bps": 200
+    },
+    {
+      "obligation_id": "X",
+      "class": "CORP",
+      "haircut_bps": 1000
+    },
+    {
+      "obligation_id": "Y",
+      "class": "CASH",
+      "haircut_bps": 0
+    },
+    {
+      "obligation_id": "Y",
+      "class": "GSEC",
+      "haircut_bps": 500
+    }
+  ]
+}

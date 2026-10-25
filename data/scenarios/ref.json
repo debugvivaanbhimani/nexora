@@ -1,0 +1,130 @@
+{
+  "id": "REF",
+  "name": "Tight inventory, three obligations",
+  "description": "Tight inventory across three competing obligations (CCP initial margin, bilateral OTC, and bank repo) with differential haircuts and funding costs.",
+  "assets": [
+    {
+      "id": "CASH",
+      "name": "Cash Reserve",
+      "class": "CASH",
+      "quantity": 3000,
+      "price_bps": 10000,
+      "funding_cost_bps": 650
+    },
+    {
+      "id": "TBILL_91D",
+      "name": "91-Day Treasury Bill",
+      "class": "TBILL",
+      "quantity": 2000,
+      "price_bps": 10000,
+      "funding_cost_bps": 120
+    },
+    {
+      "id": "GSEC_2029",
+      "name": "Government Security 2029",
+      "class": "GSEC_MID",
+      "quantity": 4000,
+      "price_bps": 10000,
+      "funding_cost_bps": 90
+    },
+    {
+      "id": "GSEC_2034",
+      "name": "Government Security 2034",
+      "class": "GSEC_LONG",
+      "quantity": 3000,
+      "price_bps": 10000,
+      "funding_cost_bps": 80
+    },
+    {
+      "id": "CORP_AAA_2028",
+      "name": "AAA Corporate Bond 2028",
+      "class": "CORP_AAA",
+      "quantity": 2000,
+      "price_bps": 10000,
+      "funding_cost_bps": 50
+    },
+    {
+      "id": "NIFTY50_BASKET",
+      "name": "Nifty 50 Equity Basket",
+      "class": "EQUITY",
+      "quantity": 2500,
+      "price_bps": 10000,
+      "funding_cost_bps": 35
+    }
+  ],
+  "obligations": [
+    {
+      "id": "O1",
+      "name": "CCP initial margin",
+      "counterparty": "CCIL",
+      "required_lakh": 6000,
+      "priority": 1
+    },
+    {
+      "id": "O2",
+      "name": "Bilateral OTC margin",
+      "counterparty": "Counterparty Bank B",
+      "required_lakh": 4500,
+      "priority": 2
+    },
+    {
+      "id": "O3",
+      "name": "Bank repo",
+      "counterparty": "Lender Bank A",
+      "required_lakh": 5000,
+      "priority": 3
+    }
+  ],
+  "rules": [
+    {
+      "obligation_id": "O1",
+      "class": "CASH",
+      "haircut_bps": 0
+    },
+    {
+      "obligation_id": "O1",
+      "class": "TBILL",
+      "haircut_bps": 50
+    },
+    {
+      "obligation_id": "O1",
+      "class": "GSEC_MID",
+      "haircut_bps": 200
+    },
+    {
+      "obligation_id": "O1",
+      "class": "GSEC_LONG",
+      "haircut_bps": 400
+    },
+    {
+      "obligation_id": "O2",
+      "class": "GSEC_MID",
+      "haircut_bps": 200
+    },
+    {
+      "obligation_id": "O2",
+      "class": "GSEC_LONG",
+      "haircut_bps": 400
+    },
+    {
+      "obligation_id": "O2",
+      "class": "CORP_AAA",
+      "haircut_bps": 400
+    },
+    {
+      "obligation_id": "O2",
+      "class": "EQUITY",
+      "haircut_bps": 1500
+    },
+    {
+      "obligation_id": "O3",
+      "class": "TBILL",
+      "haircut_bps": 50
+    },
+    {
+      "obligation_id": "O3",
+      "class": "GSEC_MID",
+      "haircut_bps": 200
+    }
+  ]
+}

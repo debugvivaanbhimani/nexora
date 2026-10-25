@@ -80,7 +80,7 @@ async function main() {
   // Check scenarioData.rules
   if (Array.isArray(scenarioData.rules)) {
     for (const r of scenarioData.rules) {
-      const oblId = r.obligationId || r.obligation || r.o;
+      const oblId = r.obligation_id || r.obligationId || r.obligation || r.o;
       const classes = r.classes || (r.class ? [r.class] : (r.cls ? [r.cls] : []));
       if (oblId && classes.length > 0) {
         if (!eligibilityMap.has(oblId)) eligibilityMap.set(oblId, new Set());

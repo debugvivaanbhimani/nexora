@@ -1,0 +1,36 @@
+{
+  "id": "S3",
+  "name": "Ineligible collateral scenario",
+  "description": "Obligation Z strictly requires CASH or GSEC, but the inventory holds only corporate bonds (CORP1), demonstrating 100% shortfall due to ineligibility.",
+  "assets": [
+    {
+      "id": "CORP1",
+      "name": "Corporate Bond 1",
+      "class": "CORP",
+      "quantity": 4000,
+      "price_bps": 10000,
+      "funding_cost_bps": 80
+    }
+  ],
+  "obligations": [
+    {
+      "id": "Z",
+      "name": "Obligation Z",
+      "counterparty": "Counterparty Z",
+      "required_lakh": 2000,
+      "priority": 1
+    }
+  ],
+  "rules": [
+    {
+      "obligation_id": "Z",
+      "class": "CASH",
+      "haircut_bps": 0
+    },
+    {
+      "obligation_id": "Z",
+      "class": "GSEC",
+      "haircut_bps": 200
+    }
+  ]
+}
