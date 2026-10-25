@@ -1,4 +1,4 @@
-# Nexora – Smart Collateral Allocation & Double-Pledge Prevention Ledger
+# Nexora: Smart Collateral Allocation & Double-Pledge Prevention Ledger
 *(Innovise Blockchain Hackathon – Problem Statement 1)*
 
 **Nexora** is an institutional-grade collateral management and encumbrance tracking platform. It unifies a high-performance mathematical optimization engine (**PuLP / HiGHS Branch-and-Cut**) with an immutable smart contract ledger (**Solidity 0.8.24 on EVM / Hardhat**) to solve multi-obligation collateral allocations at minimum funding cost while strictly guaranteeing double-pledge prevention, cross-desk non-repudiation, and sub-50ms market shock rebalancing.
