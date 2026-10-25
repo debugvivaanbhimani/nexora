@@ -264,3 +264,5 @@ export const getState = async () => {
 export const getEvents = () => api('/events');
 
 export const attack = (type) => api('/attack', { type });
+
+export const stress = (params) => api('/stress', params);

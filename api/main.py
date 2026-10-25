@@ -70,6 +70,13 @@ class AttackRequest(BaseModel):
     )
 
 
+class StressRequest(BaseModel):
+    scenario_id: str = Field(default="ref", description="Scenario ID to stress test")
+    repo_req_lakh: Optional[float] = Field(default=None, description="Override repo requirement in lakh")
+    haircut_addon_bps: int = Field(default=0, description="Additive market haircut shock in basis points")
+    use_baseline_qty: bool = Field(default=True, description="Whether to stress test against full scenario inventory")
+
+
 def _compute_canonical_hash(scenario_id: str, lines: List[Dict[str, Any]]) -> str:
     """Compute keccak256 hash of canonical JSON (sorted keys, no spaces, integers only: scenario + lines)."""
     canonical_obj = {
@@ -273,3 +280,51 @@ def execute_attack(req: AttackRequest):
         return chain.attack(req.type)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/stress")
+def run_stress_test(req: StressRequest):
+    """Run real-time stress testing with custom obligation amounts and haircut shocks."""
+    scenario_path = SCENARIOS_DIR / f"{req.scenario_id.lower()}.json"
+    if not scenario_path.exists():
+        for f in SCENARIOS_DIR.glob("*.json"):
+            if f.stem.lower() == req.scenario_id.lower():
+                scenario_path = f
+                break
+
+    if not scenario_path.exists():
+        raise HTTPException(status_code=404, detail=f"Scenario '{req.scenario_id}' not found.")
+
+    with open(scenario_path, "r", encoding="utf-8") as f:
+        scenario = json.load(f)
+
+    # 1. Apply repo requirement override if requested
+    if req.repo_req_lakh is not None and req.repo_req_lakh > 0:
+        for ob in scenario.get("obligations", []):
+            if ob.get("id") == "O3" or "repo" in ob.get("name", "").lower():
+                ob["required_lakh"] = float(req.repo_req_lakh)
+
+    # 2. Apply haircut shock if requested
+    if req.haircut_addon_bps > 0:
+        for rule in scenario.get("rules", []):
+            rule["haircut_bps"] = min(9900, int(rule.get("haircut_bps", 0)) + int(req.haircut_addon_bps))
+
+    # 3. Solve with requested inventory baseline or on-chain inventory
+    free_qty = None
+    if not req.use_baseline_qty:
+        try:
+            current_state = chain.state()
+            free_qty = {s["asset_id"]: s["available"] for s in current_state}
+        except Exception:
+            free_qty = None
+
+    opt_res = solve(scenario, method="optimiser", free_qty=free_qty)
+    cheap_res = solve(scenario, method="cheapest_first", free_qty=free_qty)
+
+    return {
+        "scenario_id": req.scenario_id,
+        "repo_req_lakh": req.repo_req_lakh,
+        "haircut_addon_bps": req.haircut_addon_bps,
+        "optimiser": opt_res,
+        "cheapest_first": cheap_res,
+    }
