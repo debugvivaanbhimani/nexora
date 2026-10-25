@@ -2,6 +2,7 @@ require("@nomicfoundation/hardhat-chai-matchers");
 require("@nomicfoundation/hardhat-ethers");
 require("hardhat-gas-reporter");
 module.exports = {
+  analytics: { enabled: false },
   solidity: { version: "0.8.24", settings: { optimizer: { enabled: true, runs: 200 } } },
   gasReporter: { enabled: true, outputFile: "gas-report.txt", noColors: true, currency: "USD" },
 };
