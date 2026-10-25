@@ -421,9 +421,9 @@ def events() -> List[Dict[str, Any]]:
             else str(ts)
         )
         args = r.get("args", {})
-        aid = args.get("asset") if isinstance(args, dict) else None
-        oid = args.get("obligation") if isinstance(args, dict) else None
-        units = args.get("requested") if isinstance(args, dict) else None
+        aid = (args.get("assetId") or args.get("asset")) if isinstance(args, dict) else None
+        oid = (args.get("obligationId") or args.get("obligation")) if isinstance(args, dict) else None
+        units = (args.get("requested") or args.get("qty") or args.get("units")) if isinstance(args, dict) else None
 
         formatted_rejections.append(
             {
