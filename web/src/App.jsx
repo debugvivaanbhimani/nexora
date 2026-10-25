@@ -145,8 +145,10 @@ function App() {
       setBlocked((value) => value + 1)
       toast.error(`${result.error} — transaction blocked`)
       await refresh()
+      return result
     } catch (e) {
       toast.error('Attack execution failed')
+      return { ok: false, error: 'Reverted', args: e.message }
     }
   }
 
@@ -270,6 +272,7 @@ function App() {
           )}
           {page === 'allocation' && (
             <Allocation
+              scenario={scenario}
               plans={plans}
               method={method}
               changeMethod={(next) => {
@@ -280,7 +283,15 @@ function App() {
             />
           )}
           {page === 'compare' && <Compare plans={plans} />}
-          {page === 'security' && <Security blocked={blocked} run={runAttack} />}
+          {page === 'security' && (
+            <Security
+              blocked={blocked}
+              run={runAttack}
+              scenario={scenario}
+              vault={state}
+              plan={plan}
+            />
+          )}
           {page === 'ledger' && <Ledger events={events} plan={plan} />}
         </div>
       </main>
@@ -538,10 +549,29 @@ function Metric({ icon: Icon, label, value, note, color }) {
   )
 }
 
-function Allocation({ plans, method, changeMethod }) {
+const ASSET_COLORS = {
+  CASH: '#2a78d6',
+  TBILL_91D: '#eb6834',
+  GSEC_2029: '#1baf7a',
+  GSEC_2034: '#eda100',
+  CORP_AAA_2028: '#e87ba4',
+  NIFTY50_BASKET: '#6250d6',
+}
+
+const ASSET_META = {
+  CASH: { name: 'Cash (INR)', label: 'Cash', color: '#2a78d6' },
+  TBILL_91D: { name: '91-day T-Bill', label: 'T-Bill', color: '#eb6834' },
+  GSEC_2029: { name: 'G-Sec 2029', label: 'G-Sec 1–5y', color: '#1baf7a' },
+  GSEC_2034: { name: 'G-Sec 2034', label: 'G-Sec >5y', color: '#eda100' },
+  CORP_AAA_2028: { name: 'AAA corporate 2028', label: 'AAA corporate', color: '#e87ba4' },
+  NIFTY50_BASKET: { name: 'Nifty-50 basket', label: 'Index equity', color: '#6250d6' },
+}
+
+function Allocation({ scenario, plans, method, changeMethod }) {
+  const [tooltip, setTooltip] = useState(null)
   const selected = plans?.find((plan) => plan.method === method) || plans?.[0]
 
-  if (!selected) {
+  if (!selected || !scenario) {
     return (
       <div className="empty-ledger">
         <Network />
@@ -551,72 +581,321 @@ function Allocation({ plans, method, changeMethod }) {
     )
   }
 
+  // Sankey Layout Geometry
+  const W = 1000
+  const H = 480
+  const pad = 28
+  const nw = 14
+  const gapN = 16
+  const xl = 220
+  const xr = W - 250
+
+  const lines = selected.lines || []
+  const cov = selected.coverage || []
+
+  // Left nodes (Assets with positive allocated usable value)
+  const left = (scenario.assets || [])
+    .map((a) => {
+      const v = lines
+        .filter((l) => l.asset_id === a.id)
+        .reduce((sum, l) => sum + (l.usable_lakh || 0), 0)
+      return { id: a.id, name: ASSET_META[a.id]?.name || a.name, v }
+    })
+    .filter((n) => n.v > 0)
+
+  // Right nodes (Obligations)
+  const right = (scenario.obligations || []).map((o) => {
+    const c = cov.find((item) => item.obligation_id === o.id)
+    return {
+      id: o.id,
+      name: o.name,
+      v: o.required_lakh,
+      cov: c ? c.covered_lakh : 0,
+      short: c ? c.shortfall_lakh : 0,
+    }
+  })
+
+  const totL = left.reduce((s, n) => s + n.v, 0)
+  const totR = right.reduce((s, n) => s + n.v, 0)
+  const maxTot = Math.max(totL, totR) || 1
+  const k = (H - 2 * pad - gapN * Math.max(left.length, right.length)) / maxTot
+
+  let yL = pad
+  left.forEach((n) => {
+    n.y = yL
+    n.h = Math.max(8, n.v * k)
+    n.off = 0
+    yL += n.h + gapN
+  })
+
+  let yR = pad
+  right.forEach((n) => {
+    n.y = yR
+    n.h = Math.max(8, n.v * k)
+    n.off = 0
+    yR += n.h + gapN
+  })
+
+  // Sort lines so links do not tangle
+  const sortedLines = [...lines].sort((p, q) => {
+    const idxP = right.findIndex((n) => n.id === p.obligation_id)
+    const idxQ = right.findIndex((n) => n.id === q.obligation_id)
+    return idxP - idxQ
+  })
+
+  const paths = sortedLines
+    .map((l) => {
+      const L = left.find((n) => n.id === l.asset_id)
+      const R = right.find((n) => n.id === l.obligation_id)
+      if (!L || !R) return null
+
+      const th = Math.max(2, (l.usable_lakh || 0) * k)
+      const y0 = L.y + L.off + th / 2
+      const y1 = R.y + R.off + th / 2
+      L.off += th
+      R.off += th
+
+      const mx = (xl + nw + xr) / 2
+      const d = `M${xl + nw},${y0} C${mx},${y0} ${mx},${y1} ${xr},${y1}`
+      const color = ASSET_COLORS[l.asset_id] || '#2e9c70'
+
+      return {
+        d,
+        th,
+        color,
+        line: l,
+        assetName: ASSET_META[l.asset_id]?.name || l.asset_id,
+        obligationName: R.name,
+      }
+    })
+    .filter(Boolean)
+
+  const shortfallCount = cov.filter((c) => c.shortfall_lakh > 0.5)
+
   return (
     <>
       <PageIntro
-        eyebrow="Allocation analysis"
-        title="Collateral flow by obligation"
-        copy="Flow width represents usable value after haircut. Compare methods to identify where rule-based strategies leave eligible collateral underused."
+        eyebrow="COLLATERAL FLOW GRAPH"
+        title="Allocation Flow by Obligation"
+        copy="Band width represents usable value after haircut. Switch strategies to watch how greedy heuristics burn repo-eligible assets, stranding Bank Repo downstream."
       />
-      <div className="method-tabs">
-        {methods.map((item) => (
-          <button
-            key={item}
-            className={method === item ? 'active' : ''}
-            onClick={() => changeMethod(item)}
-          >
-            {methodNames[item]}
-            {item === 'optimiser' && <span>Recommended</span>}
-          </button>
-        ))}
-      </div>
-      <section className="flow-card">
-        <div className="flow-head">
-          <span>ASSET</span>
-          <span>USABLE VALUE AFTER HAIRCUT</span>
-          <span>OBLIGATION</span>
-        </div>
-        <div className="flow-list">
-          {selected.lines?.map((line, index) => (
-            <div
-              className="flow-line"
-              key={`${line.asset_id}-${line.obligation_id}-${index}`}
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 14,
+          marginBottom: 12,
+        }}
+      >
+        <div className="method-tabs" style={{ margin: 0 }}>
+          {methods.map((item) => (
+            <button
+              key={item}
+              className={method === item ? 'active' : ''}
+              onClick={() => changeMethod(item)}
             >
-              <div className="flow-node">
-                <b>{line.asset_id}</b>
-                <span>{num(line.units)} units</span>
-              </div>
-              <div className="flow-path">
-                <i
-                  className={`flow-${index % 5}`}
-                  style={{
-                    height: `${Math.max(
-                      8,
-                      Math.min(34, (line.usable_lakh || 10) / 85)
-                    )}px`,
-                  }}
-                />
-                <span>{money(line.usable_lakh)}</span>
-              </div>
-              <div className="flow-node end">
-                <b>{line.obligation_id}</b>
-                <span>{line.haircut_bps / 100}% haircut</span>
-              </div>
-            </div>
+              {methodNames[item]}
+              {item === 'optimiser' && <span>Recommended</span>}
+            </button>
           ))}
         </div>
-        {selected.totals?.shortfall_lakh > 0 && (
-          <div className="flow-gap">
-            <TriangleAlert />
-            <div>
-              <b>{money(selected.totals.shortfall_lakh)} gap shortfall</b>
-              <span>
-                This heuristic consumed collateral that was needed to cover other obligations.
-              </span>
-            </div>
+
+        <div style={{ fontSize: 13 }}>
+          {shortfallCount.length === 0 ? (
+            <span
+              className="badge-pill mint"
+              style={{ padding: '6px 12px', fontSize: 12 }}
+            >
+              <Check size={14} /> {methodNames[method]} covers all obligations
+            </span>
+          ) : (
+            <span
+              className="badge-pill coral"
+              style={{ padding: '6px 12px', fontSize: 12 }}
+            >
+              <TriangleAlert size={14} /> Shortfall on{' '}
+              {shortfallCount.map((s) => s.obligation_id).join(', ')} (
+              {money(selected.totals?.shortfall_lakh)})
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="sankey-card">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label="Sankey collateral flow diagram"
+        >
+          {/* Ribbons */}
+          {paths.map((p, idx) => (
+            <path
+              key={idx}
+              className="sankey-link"
+              d={p.d}
+              stroke={p.color}
+              strokeWidth={p.th}
+              onMouseMove={(e) => {
+                setTooltip({
+                  x: e.clientX,
+                  y: e.clientY,
+                  line: p.line,
+                  assetName: p.assetName,
+                  obligationName: p.obligationName,
+                  color: p.color,
+                })
+              }}
+              onMouseLeave={() => setTooltip(null)}
+            />
+          ))}
+
+          {/* Left nodes (Assets) */}
+          {left.map((n) => (
+            <g key={n.id}>
+              <rect
+                x={xl}
+                y={n.y}
+                width={nw}
+                height={n.h}
+                rx={3}
+                fill={ASSET_COLORS[n.id] || '#2e9c70'}
+              />
+              <text
+                x={xl - 14}
+                y={n.y + n.h / 2 - 3}
+                textAnchor="end"
+                className="sankey-node-text"
+              >
+                {n.name}
+              </text>
+              <text
+                x={xl - 14}
+                y={n.y + n.h / 2 + 13}
+                textAnchor="end"
+                className="sankey-sub-text"
+              >
+                {money(n.v)} usable
+              </text>
+            </g>
+          ))}
+
+          {/* Right nodes (Obligations) */}
+          {right.map((n) => {
+            const ch = Math.min(n.h, n.cov * k)
+            const gapH = n.short * k
+            return (
+              <g key={n.id}>
+                {/* Covered bar */}
+                <rect
+                  x={xr}
+                  y={n.y}
+                  width={nw}
+                  height={Math.max(2, ch)}
+                  rx={3}
+                  fill="var(--mint-strong)"
+                />
+                {/* Shortfall gap dashed box */}
+                {n.short > 0.5 && (
+                  <rect
+                    x={xr}
+                    y={n.y + ch}
+                    width={nw}
+                    height={Math.max(4, gapH)}
+                    rx={3}
+                    fill="none"
+                    stroke="var(--coral)"
+                    strokeWidth="1.8"
+                    strokeDasharray="4 3"
+                  />
+                )}
+                {/* Labels */}
+                <text
+                  x={xr + nw + 14}
+                  y={n.y + 14}
+                  className="sankey-node-text"
+                >
+                  {n.name}
+                </text>
+                <text
+                  x={xr + nw + 14}
+                  y={n.y + 29}
+                  className="sankey-sub-text"
+                >
+                  {money(n.cov)} of {money(n.v)}
+                </text>
+                {n.short > 0.5 && (
+                  <text
+                    x={xr + nw + 14}
+                    y={n.y + 45}
+                    className="sankey-sub-text"
+                    fill="var(--coral)"
+                    style={{ fontWeight: 600, fill: 'var(--coral)' }}
+                  >
+                    gap {money(n.short)}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+
+        {/* Legend */}
+        <div className="sankey-legend">
+          {Object.entries(ASSET_META).map(([id, meta]) => (
+            <span key={id}>
+              <i className="sankey-swatch" style={{ background: meta.color }} />
+              {meta.name}
+            </span>
+          ))}
+          <span>
+            <i
+              className="sankey-swatch"
+              style={{
+                background: 'transparent',
+                border: '1.5px dashed var(--coral)',
+              }}
+            />
+            Uncovered Shortfall Gap
+          </span>
+        </div>
+      </div>
+
+      {/* Floating Hover Tooltip */}
+      {tooltip && (
+        <div
+          className="sankey-tip"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          <strong style={{ color: tooltip.color }}>
+            {tooltip.assetName} → {tooltip.obligationName}
+          </strong>
+          <div>
+            <b>{num(tooltip.line.units)} units</b> ·{' '}
+            {money(tooltip.line.market_value_lakh)} market value
           </div>
-        )}
-      </section>
+          <div>
+            Haircut: {(tooltip.line.haircut_bps / 100).toFixed(1)}% · Usable:{' '}
+            <b>{money(tooltip.line.usable_lakh)}</b>
+          </div>
+          <div>Annual carry cost: {money(tooltip.line.annual_cost_lakh)}</div>
+          {tooltip.line.reason && (
+            <div
+              style={{
+                marginTop: 6,
+                paddingTop: 6,
+                borderTop: '1px solid rgba(255,255,255,0.15)',
+                color: 'var(--mint)',
+                fontSize: 11,
+              }}
+            >
+              💡 {tooltip.line.reason}
+            </div>
+          )}
+        </div>
+      )}
     </>
   )
 }
@@ -718,79 +997,336 @@ function ComparisonChart({ title, unit, field, max, plans }) {
   )
 }
 
-const attackTypes = [
-  ['double_pledge', 'Double pledge', 'Reuse collateral already promised to Desk 1.'],
-  ['duplicate', 'Replay allocation', 'Submit a previously committed plan identifier.'],
-  ['excessive', 'Excess quantity', 'Reserve more corporate bonds than the vault holds.'],
-  ['ineligible', 'Break eligibility', 'Use equity where only bills and gilts are accepted.'],
-  ['stale', 'Stale inventory', 'Commit against an inventory version that has changed.'],
-]
+function Security({ blocked, run, scenario, vault, plan }) {
+  const [animating, setAnimating] = useState(false)
+  const [attempts, setAttempts] = useState(blocked || 0)
+  const [blockedCount, setBlockedCount] = useState(blocked || 0)
+  const [lastAttack, setLastAttack] = useState(null)
 
-function Security({ blocked, run }) {
+  const activePlan = plan || {
+    plan_hash: '0x8c019f4a138bcfd71e9802bc3410f92b774619d80312',
+    plan_id: 'ref-optimiser-1',
+  }
+  const shortSeal = `${(activePlan.plan_hash || '').slice(0, 8)}…${(activePlan.plan_hash || '').slice(-4)}`
+
+  const handleFireAttack = async (id, title, desc, expectedRevert) => {
+    if (animating) return
+    setAnimating(true)
+    setAttempts((prev) => prev + 1)
+
+    // Trigger laser projectile flight
+    const packet = document.getElementById('laser-packet')
+    const shield = document.getElementById('shield-3d-svg')
+    if (packet) {
+      packet.classList.remove('firing')
+      void packet.offsetWidth
+      packet.classList.add('firing')
+    }
+
+    setTimeout(() => {
+      if (shield) {
+        shield.classList.remove('hit')
+        void shield.offsetWidth
+        shield.classList.add('hit')
+      }
+    }, 280)
+
+    try {
+      const res = await run(id)
+      setBlockedCount((prev) => prev + 1)
+      setLastAttack({
+        id,
+        title,
+        desc,
+        revertCode: res?.error || expectedRevert,
+        args: res?.args || '',
+        actor: res?.actor || 'Desk 2 (Adversary)',
+      })
+    } catch (e) {
+      setBlockedCount((prev) => prev + 1)
+      setLastAttack({
+        id,
+        title,
+        desc,
+        revertCode: expectedRevert,
+        args: 'Reverted at EVM opcode level',
+        actor: 'Desk 2',
+      })
+    } finally {
+      setTimeout(() => setAnimating(false), 650)
+    }
+  }
+
+  const attacksList = [
+    {
+      id: 'double_pledge',
+      title: 'Double Pledge Exploit',
+      desc: 'Attempt to re-pledge free cash already committed to Desk 1',
+      expected: 'InsufficientQuantity',
+    },
+    {
+      id: 'duplicate',
+      title: 'Duplicate Plan Replay',
+      desc: 'Re-submit already committed allocation plan identifier',
+      expected: 'DuplicateAllocation',
+    },
+    {
+      id: 'excessive',
+      title: 'Excess Quantity Attack',
+      desc: 'Request 5,000 units of AAA Bonds when only 2,000 exist in vault',
+      expected: 'InsufficientQuantity',
+    },
+    {
+      id: 'ineligible',
+      title: 'Ineligible Collateral Breach',
+      desc: 'Force Nifty-50 Equity basket into strict Bank Repo',
+      expected: 'Ineligible',
+    },
+    {
+      id: 'stale',
+      title: 'Stale Inventory Front-Run',
+      desc: 'Commit against an outdated inventory version to bypass lock',
+      expected: 'StalePlan',
+    },
+  ]
+
   return (
     <>
       <PageIntro
-        eyebrow="Control validation"
-        title="Smart-contract safeguards"
-        copy="Run five adversarial transactions to verify quantity, eligibility, replay and inventory-version controls."
+        eyebrow="DOUBLE-PLEDGE & EVM INTEGRITY DEFENSE"
+        title="Interactive 3D Attack Defense Arena"
+        copy="Desk 2 has direct RPC credentials and attempts 5 distinct cryptographic & collateral attacks. The CollateralLedger smart contract enforces quantity, eligibility, replay, and version invariants at the EVM opcode level."
       />
-      <section className="security-hero">
-        <div className="security-desk">
-          <span>DESK 1</span>
-          <WalletCards />
-          <h3>Legitimate allocator</h3>
-          <p>Approved reservations held in CollateralLedger.</p>
-          <small>
-            <Check /> Position secured
-          </small>
-        </div>
-        <div className="security-shield">
-          <div>
-            <ShieldCheck />
+
+      <div className="arena-3d-stage">
+        <div className="arena-3d-layout">
+          {/* Desk 1: Allocator */}
+          <div className="desk-3d allocator">
+            <div className="desk-3d-head">
+              <h3>
+                <WalletCards size={18} color="var(--mint-strong)" />
+                Desk 1 · Verified Allocator
+              </h3>
+              <span className="badge-pill mint">
+                <Check size={12} /> Position Sealed
+              </span>
+            </div>
+
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--muted)',
+                marginBottom: 12,
+              }}
+            >
+              Plan Hash:{' '}
+              <span className="mono" style={{ color: 'var(--ink)' }}>
+                {shortSeal}
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+              {scenario?.obligations?.map((ob) => (
+                <div
+                  key={ob.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '8px 10px',
+                    background: 'var(--paper)',
+                    borderRadius: 6,
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  <div>
+                    <b>{ob.name}</b>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                      {ob.counterparty}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <b>{money(ob.required_lakh)}</b>
+                    <div style={{ fontSize: 11, color: '#047857' }}>
+                      Secured on-chain
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                paddingTop: 10,
+                borderTop: '1px solid var(--line)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: 12,
+              }}
+            >
+              <span style={{ color: 'var(--muted)' }}>Ledger Invariants:</span>
+              <b style={{ color: 'var(--mint-strong)' }}>Active & Enforced</b>
+            </div>
           </div>
-          <span>POLICY ENGINE</span>
-          <b>{blocked ? 'Attack rejected' : 'Monitoring'}</b>
-        </div>
-        <div className="security-desk attacker">
-          <span>DESK 2</span>
-          <TriangleAlert />
-          <h3>Adversarial desk</h3>
-          <p>Attempting to bypass quantity and eligibility controls.</p>
-          <small>
-            <X /> Untrusted actor
-          </small>
-        </div>
-      </section>
-      <div className="security-score">
-        <div>
-          <span>Attempts</span>
-          <b>{blocked}</b>
-        </div>
-        <i />
-        <div>
-          <span>Blocked</span>
-          <b>{blocked}</b>
-        </div>
-        <i />
-        <div>
-          <span>Loss prevented</span>
-          <b>{blocked ? '100%' : '—'}</b>
+
+          {/* Center: 3D Quantum Defense Core */}
+          <div className="shield-3d-core">
+            <div className="shield-portal">
+              <div className="portal-ring outer" />
+              <div className="portal-ring inner" />
+
+              {/* Animated Laser Projectile */}
+              <div className="laser-packet" id="laser-packet" />
+
+              {/* 3D Shield SVG */}
+              <svg
+                id="shield-3d-svg"
+                className="shield-svg"
+                viewBox="0 0 150 170"
+                aria-hidden="true"
+              >
+                <path
+                  className="shield-hull"
+                  d="M75 8l60 20v48c0 40-26 68-60 84C41 144 15 116 15 76V28z"
+                />
+                <path
+                  d="M52 86l16 16 31-34"
+                  fill="none"
+                  stroke="var(--mint-strong)"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            {/* Revert HUD Stamp */}
+            <div className="revert-hud">
+              {lastAttack ? (
+                <>
+                  <span className="revert-stamp-badge">
+                    <X
+                      size={14}
+                      style={{ verticalAlign: 'middle', marginRight: 4 }}
+                    />
+                    BLOCKED · REVERTED
+                  </span>
+                  <div className="revert-reason-text">
+                    EVM Error: {lastAttack.revertCode}
+                  </div>
+                  <div className="revert-sub-text">
+                    {lastAttack.title} · Reverted before state mutation
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="badge-pill mint"
+                    style={{ padding: '6px 14px' }}
+                  >
+                    <ShieldCheck size={14} /> DEFENSE ENGINE ARMED
+                  </span>
+                  <div className="revert-sub-text" style={{ marginTop: 6 }}>
+                    Launch any exploit from Desk 2 to test defense
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Score HUD */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 18,
+                marginTop: 12,
+                fontSize: 12,
+                color: 'var(--muted)',
+                textAlign: 'center',
+              }}
+            >
+              <div>
+                <b
+                  style={{
+                    display: 'block',
+                    fontSize: 18,
+                    color: 'var(--ink)',
+                  }}
+                >
+                  {attempts}
+                </b>
+                Attempts
+              </div>
+              <div>
+                <b style={{ display: 'block', fontSize: 18, color: '#047857' }}>
+                  {blockedCount}
+                </b>
+                Blocked
+              </div>
+              <div>
+                <b
+                  style={{
+                    display: 'block',
+                    fontSize: 18,
+                    color: 'var(--mint-strong)',
+                  }}
+                >
+                  100%
+                </b>
+                Loss Prevented
+              </div>
+            </div>
+          </div>
+
+          {/* Desk 2: Attacker */}
+          <div className="desk-3d attacker">
+            <div className="desk-3d-head">
+              <h3>
+                <TriangleAlert size={18} color="var(--coral)" />
+                Desk 2 · Rogue Desk / Exploiter
+              </h3>
+              <span className="badge-pill coral">
+                <X size={12} /> Untrusted Actor
+              </span>
+            </div>
+
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--muted)',
+                marginBottom: 12,
+              }}
+            >
+              Select an adversarial vector to fire at the smart contract:
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              {attacksList.map((atk) => (
+                <button
+                  key={atk.id}
+                  className="atk-card-btn"
+                  onClick={() =>
+                    handleFireAttack(
+                      atk.id,
+                      atk.title,
+                      atk.desc,
+                      atk.expected
+                    )
+                  }
+                  disabled={animating}
+                >
+                  <div>
+                    <b>{atk.title}</b>
+                    <p>{atk.desc}</p>
+                  </div>
+                  <span className="atk-launch-tag">
+                    <Zap size={12} /> Fire
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-      <section className="attack-list">
-        {attackTypes.map(([id, title, copyText], index) => (
-          <button key={id} onClick={() => run(id)}>
-            <span className="attack-number">0{index + 1}</span>
-            <div>
-              <b>{title}</b>
-              <p>{copyText}</p>
-            </div>
-            <span className="launch">
-              Simulate <Play />
-            </span>
-          </button>
-        ))}
-      </section>
     </>
   )
 }
