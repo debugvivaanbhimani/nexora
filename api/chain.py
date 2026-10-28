@@ -279,10 +279,17 @@ def commit(plan: Dict[str, Any], signer: str = "allocator") -> Dict[str, Any]:
 
     # Plan hash: bytes32
     raw_hash = plan.get("plan_hash")
-    if raw_hash and isinstance(raw_hash, str) and raw_hash.startswith("0x") and len(raw_hash) == 66:
-        plan_hash_b32 = bytes.fromhex(raw_hash[2:])
-    elif raw_hash and isinstance(raw_hash, bytes) and len(raw_hash) == 32:
-        plan_hash_b32 = raw_hash
+    if raw_hash:
+        if isinstance(raw_hash, str):
+            clean_hex = raw_hash[2:] if raw_hash.startswith("0x") else raw_hash
+            if len(clean_hex) == 64:
+                plan_hash_b32 = bytes.fromhex(clean_hex)
+            else:
+                plan_hash_b32 = Web3.keccak(text=raw_hash)
+        elif isinstance(raw_hash, bytes) and len(raw_hash) == 32:
+            plan_hash_b32 = raw_hash
+        else:
+            plan_hash_b32 = Web3.keccak(text=json.dumps(plan, sort_keys=True))
     else:
         plan_hash_b32 = Web3.keccak(text=json.dumps(plan, sort_keys=True))
 
@@ -334,6 +341,82 @@ def commit(plan: Dict[str, Any], signer: str = "allocator") -> Dict[str, Any]:
 
     LAST_COMMITTED_PLAN_ID = plan_id
     return {"ok": True, "tx_hash": tx_hash.hex(), "block": receipt.blockNumber}
+
+
+def release(allocation_id: str, signer: str = "allocator") -> Dict[str, Any]:
+    """Release an active allocation on-chain."""
+    w3 = get_web3()
+    dep = get_deployment()
+    contract = get_contract(w3)
+    account = dep["accounts"].get(signer, dep["accounts"]["allocator"])
+    alloc_id_b32 = to_b32(allocation_id)
+    try:
+        tx_hash = contract.functions.release(alloc_id_b32).transact({"from": account})
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        return {"ok": True, "tx_hash": tx_hash.hex(), "block": receipt.blockNumber}
+    except Exception as exc:
+        err_name, err_args = decode_error(exc, dep["abi"])
+        return {"ok": False, "error": err_name, "args": err_args}
+
+
+def commit_diff(new_plan: Dict[str, Any], old_plan_id: Optional[str] = None, signer: str = "allocator") -> Dict[str, Any]:
+    """Applies a rebalanced plan on-chain: releases the old allocation then commits the new plan."""
+    global LAST_COMMITTED_PLAN_ID
+    target_old_id = old_plan_id or LAST_COMMITTED_PLAN_ID
+    w3 = get_web3()
+    dep = get_deployment()
+    contract = get_contract(w3)
+    account = dep["accounts"].get(signer, dep["accounts"]["allocator"])
+
+    released_tx = None
+    if target_old_id:
+        try:
+            alloc_info = contract.functions.allocations(to_b32(target_old_id)).call()
+            # alloc_info is (allocator, planHash, committedAt, active)
+            if alloc_info[3]:  # active
+                rel_tx = contract.functions.release(to_b32(target_old_id)).transact({"from": account})
+                w3.eth.wait_for_transaction_receipt(rel_tx)
+                released_tx = rel_tx.hex()
+        except Exception:
+            pass
+
+    commit_res = commit(new_plan, signer=signer)
+    commit_res["released_plan_id"] = target_old_id
+    commit_res["released_tx"] = released_tx
+    return commit_res
+
+
+def verify_plan(plan_id: str, plan_hash: str) -> Dict[str, Any]:
+    """Verify an allocation against the on-chain cryptographic commitment."""
+    w3 = get_web3()
+    contract = get_contract(w3)
+    alloc_id_b32 = to_b32(plan_id)
+
+    try:
+        alloc_info = contract.functions.allocations(alloc_id_b32).call()
+        allocator, on_chain_hash_b32, committed_at, active = alloc_info
+        on_chain_hash = "0x" + on_chain_hash_b32.hex()
+
+        match = (plan_hash.lower() == on_chain_hash.lower()) and committed_at > 0
+        return {
+            "ok": True,
+            "verified": match,
+            "plan_id": plan_id,
+            "computed_hash": plan_hash,
+            "on_chain_hash": on_chain_hash,
+            "committed_at": int(committed_at),
+            "allocator": allocator,
+            "active": active,
+            "tampered": not match,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "verified": False,
+            "plan_id": plan_id,
+            "computed_hash": plan_hash,
+        }
 
 
 def events() -> List[Dict[str, Any]]:

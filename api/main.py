@@ -43,6 +43,7 @@ SCENARIOS_DIR = BASE_DIR / "data" / "scenarios"
 # In-memory storage of generated plans and counter
 PLANS: Dict[str, Dict[str, Any]] = {}
 PLAN_COUNTER: int = 1
+SHOCKED_SCENARIOS: Dict[str, Dict[str, Any]] = {}
 
 
 # Request Models
@@ -77,6 +78,30 @@ class StressRequest(BaseModel):
     use_baseline_qty: bool = Field(default=True, description="Whether to stress test against full scenario inventory")
 
 
+class ShockRequest(BaseModel):
+    scenario_id: str = Field(default="ref", description="Scenario ID to shock")
+    class_moves: Dict[str, int] = Field(
+        ...,
+        description="Basis point change per asset class or asset ID (e.g. {'EQUITY': -2000, 'CORP_AAA': -500})",
+    )
+
+
+class ReoptimiseRequest(BaseModel):
+    scenario_id: str = Field(default="ref", description="Scenario ID to re-optimise")
+    plan_id: Optional[str] = Field(default=None, description="Previous plan ID to minimize churn from")
+    churn_weight: float = Field(default=0.0002, description="Lakh per unit moved (default 0.0002 ≈ 2 bps)")
+
+
+class CommitDiffRequest(BaseModel):
+    plan_id: str = Field(..., description="Re-optimised Plan ID to commit on-chain")
+    old_plan_id: Optional[str] = Field(default=None, description="Old plan ID to release")
+
+
+class VerifyRequest(BaseModel):
+    plan_id: str = Field(..., description="Plan ID to verify on-chain")
+    simulate_tamper: bool = Field(default=False, description="Simulate rogue database edit for auditor demonstration")
+
+
 def _compute_canonical_hash(scenario_id: str, lines: List[Dict[str, Any]]) -> str:
     """Compute keccak256 hash of canonical JSON (sorted keys, no spaces, integers only: scenario + lines)."""
     canonical_obj = {
@@ -91,7 +116,8 @@ def _compute_canonical_hash(scenario_id: str, lines: List[Dict[str, Any]]) -> st
         "scenario": str(scenario_id),
     }
     canonical_str = json.dumps(canonical_obj, sort_keys=True, separators=(",", ":"))
-    return Web3.keccak(text=canonical_str).hex()
+    h = Web3.keccak(text=canonical_str).hex()
+    return h if h.startswith("0x") else f"0x{h}"
 
 
 @app.get("/health")
@@ -328,3 +354,196 @@ def run_stress_test(req: StressRequest):
         "optimiser": opt_res,
         "cheapest_first": cheap_res,
     }
+
+
+@app.post("/shock")
+def apply_market_shock(req: ShockRequest):
+    """Update scenario market prices and evaluate coverage on current committed plan."""
+    scenario_path = SCENARIOS_DIR / f"{req.scenario_id.lower()}.json"
+    if not scenario_path.exists():
+        for f in SCENARIOS_DIR.glob("*.json"):
+            if f.stem.lower() == req.scenario_id.lower():
+                scenario_path = f
+                break
+    if not scenario_path.exists():
+        raise HTTPException(status_code=404, detail=f"Scenario '{req.scenario_id}' not found.")
+
+    with open(scenario_path, "r", encoding="utf-8") as f:
+        scenario = json.load(f)
+
+    # Apply class_moves
+    new_prices = {}
+    for a in scenario.get("assets", []):
+        move = req.class_moves.get(a.get("class"), req.class_moves.get(a.get("id"), 0))
+        if move != 0:
+            a["price_bps"] = max(100, int(a.get("price_bps", 10000)) + int(move))
+        new_prices[a["id"]] = a["price_bps"]
+
+    SHOCKED_SCENARIOS[req.scenario_id.lower()] = scenario
+
+    # Evaluate current committed plan under new prices
+    plan = None
+    if chain.LAST_COMMITTED_PLAN_ID and chain.LAST_COMMITTED_PLAN_ID in PLANS:
+        plan = PLANS[chain.LAST_COMMITTED_PLAN_ID]
+    elif PLANS:
+        plan = list(PLANS.values())[-1]
+
+    coverage_list = []
+    under_covered = []
+    total_shortfall = 0.0
+
+    if plan:
+        lines = plan.get("lines", [])
+        rules = {(r["obligation_id"], r["class"]): r["haircut_bps"] for r in scenario.get("rules", [])}
+        assets_map = {a["id"]: a for a in scenario.get("assets", [])}
+
+        for ob in scenario.get("obligations", []):
+            o_id = ob["id"]
+            req_lakh = float(ob["required_lakh"])
+            usable_scaled = 0
+            for l in lines:
+                if l["obligation_id"] == o_id:
+                    aid = l["asset_id"]
+                    if aid in assets_map and (o_id, assets_map[aid]["class"]) in rules:
+                        h_bps = rules[(o_id, assets_map[aid]["class"])]
+                        p_bps = assets_map[aid]["price_bps"]
+                        usable_scaled += int(l["units"]) * p_bps * (10000 - h_bps)
+
+            cov_lakh = round(usable_scaled / 1e8, 4)
+            is_covered = cov_lakh >= req_lakh
+            shortfall = 0.0 if is_covered else round(req_lakh - cov_lakh, 4)
+            total_shortfall += shortfall
+
+            cov_item = {
+                "obligation_id": o_id,
+                "name": ob.get("name", o_id),
+                "required_lakh": req_lakh,
+                "covered_lakh": cov_lakh,
+                "shortfall_lakh": shortfall,
+                "covered": is_covered,
+            }
+            coverage_list.append(cov_item)
+            if not is_covered:
+                under_covered.append(cov_item)
+
+    return {
+        "scenario_id": req.scenario_id,
+        "class_moves": req.class_moves,
+        "new_prices": new_prices,
+        "coverage": coverage_list,
+        "under_covered": under_covered,
+        "total_shortfall_lakh": round(total_shortfall, 4),
+        "evaluated_plan_id": plan.get("plan_id") if plan else None,
+    }
+
+
+@app.post("/reoptimise")
+def reoptimise_plan(req: ReoptimiseRequest):
+    """Re-optimise collateral under current shocked prices minimizing operational churn."""
+    global PLAN_COUNTER
+    scenario = SHOCKED_SCENARIOS.get(req.scenario_id.lower())
+    if not scenario:
+        scenario_path = SCENARIOS_DIR / f"{req.scenario_id.lower()}.json"
+        if not scenario_path.exists():
+            for f in SCENARIOS_DIR.glob("*.json"):
+                if f.stem.lower() == req.scenario_id.lower():
+                    scenario_path = f
+                    break
+        if not scenario_path.exists():
+            raise HTTPException(status_code=404, detail=f"Scenario '{req.scenario_id}' not found.")
+        with open(scenario_path, "r", encoding="utf-8") as f:
+            scenario = json.load(f)
+
+    # Find previous plan to minimize churn against
+    base_plan = None
+    if req.plan_id and req.plan_id in PLANS:
+        base_plan = PLANS[req.plan_id]
+    elif chain.LAST_COMMITTED_PLAN_ID and chain.LAST_COMMITTED_PLAN_ID in PLANS:
+        base_plan = PLANS[chain.LAST_COMMITTED_PLAN_ID]
+    elif PLANS:
+        base_plan = list(PLANS.values())[-1]
+    else:
+        base_plan = solve(scenario, method="optimiser")
+
+    prev_lines = base_plan.get("lines", [])
+
+    # For re-optimisation, the new plan replaces the previous allocation upon commit-diff,
+    # so the full scenario inventory is available to reallocate.
+    free_qty = None
+
+    # 1. Churn-weighted solve
+    churn_result = solve(
+        scenario,
+        method="optimiser",
+        free_qty=free_qty,
+        prev_allocation=prev_lines,
+        churn_weight=req.churn_weight,
+    )
+
+    # 2. From-scratch solve for comparison
+    scratch_result = solve(
+        scenario,
+        method="optimiser",
+        free_qty=free_qty,
+        prev_allocation=prev_lines,
+        churn_weight=0.0,
+    )
+
+    new_plan_id = f"{req.scenario_id.lower()}-reoptimised-{PLAN_COUNTER}"
+    PLAN_COUNTER += 1
+    plan_hash = _compute_canonical_hash(req.scenario_id, churn_result["lines"])
+    churn_result["plan_id"] = new_plan_id
+    churn_result["plan_hash"] = plan_hash
+    PLANS[new_plan_id] = churn_result
+
+    scratch_moved = scratch_result.get("units_moved", 0)
+    churn_moved = churn_result.get("units_moved", 0)
+    units_saved = max(0, scratch_moved - churn_moved)
+    reduction_pct = round((units_saved / max(1, scratch_moved)) * 100, 1)
+    extra_cost = round(
+        max(0.0, churn_result["totals"]["funding_cost_lakh"] - scratch_result["totals"]["funding_cost_lakh"]),
+        4,
+    )
+
+    return {
+        "plan": churn_result,
+        "diff": churn_result.get("diff", []),
+        "units_moved": churn_moved,
+        "scratch_units_moved": scratch_moved,
+        "units_saved": units_saved,
+        "reduction_pct": reduction_pct,
+        "extra_cost_lakh": extra_cost,
+        "prev_plan_id": base_plan.get("plan_id"),
+    }
+
+
+@app.post("/commit-diff")
+def commit_diff_plan(req: CommitDiffRequest):
+    """Apply the re-optimised diff on-chain: releases old allocation and commits the new one."""
+    if req.plan_id not in PLANS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Plan '{req.plan_id}' not found in memory. Please run /reoptimise first.",
+        )
+    plan = PLANS[req.plan_id]
+    result = chain.commit_diff(plan, old_plan_id=req.old_plan_id, signer="allocator")
+    return result
+
+
+@app.post("/verify")
+def verify_allocation(req: VerifyRequest):
+    """Cryptographic auditor verification: checks client-recomputed plan hash against on-chain root."""
+    if req.plan_id not in PLANS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Plan '{req.plan_id}' not found in memory.",
+        )
+    plan = dict(PLANS[req.plan_id])
+    plan_hash = plan.get("plan_hash")
+    if req.simulate_tamper:
+        # Alter the hash to simulate a corrupt database record
+        plan_hash = "0x" + "bad0" * 16
+
+    result = chain.verify_plan(req.plan_id, plan_hash)
+    return result
+

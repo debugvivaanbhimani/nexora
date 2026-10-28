@@ -1,5 +1,5 @@
 export const USE_MOCK = false;
-const BASE = 'http://localhost:8000';
+const BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const wait = (ms = 300) => new Promise((r) => setTimeout(r, ms + Math.random() * 200));
 
@@ -266,3 +266,11 @@ export const getEvents = () => api('/events');
 export const attack = (type) => api('/attack', { type });
 
 export const stress = (params) => api('/stress', params);
+
+export const shock = (params) => api('/shock', params);
+
+export const reoptimise = (params) => api('/reoptimise', params);
+
+export const commitDiff = (plan_id, old_plan_id) => api('/commit-diff', { plan_id, old_plan_id });
+
+export const verify = (plan_id, simulate_tamper = false) => api('/verify', { plan_id, simulate_tamper });

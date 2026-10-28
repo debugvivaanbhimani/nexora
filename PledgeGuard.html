@@ -1,0 +1,635 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>PledgeGuard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: security-printed bond certificate turned into a calm desk tool — one idea per view, generous air, ledger-ink palette */
+:root{
+  --paper:#F3F6F2; --surface:#FFFFFF; --surface-2:#E9EFEA; --rule:#D3DDD6;
+  --ink:#10251F; --ink-2:#4A5E57; --ink-3:#7D8E88;
+  --primary:#0F5A47; --primary-ink:#FFFFFF; --primary-soft:#DCEBE4;
+  --brass:#9A7430; --brass-soft:#F1E7D3;
+  --chain:#2F5DA8; --chain-soft:#E1E9F6;
+  --good:#1F7A52; --good-soft:#DDF0E5; --warn:#A8670F; --warn-soft:#F7EAD5; --bad:#B8322D; --bad-soft:#F8E1DF;
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#6250d6;
+  --guill:rgba(15,90,71,.10);
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px; --shadow:0 1px 2px rgba(16,37,31,.05), 0 8px 24px rgba(16,37,31,.06);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#0B1412; --surface:#111D1A; --surface-2:#16251F; --rule:#24362F;
+  --ink:#E6EFEA; --ink-2:#A9BBB3; --ink-3:#768A82;
+  --primary:#4FC29A; --primary-ink:#06231A; --primary-soft:#173A2F;
+  --brass:#D9B26A; --brass-soft:#2E2617; --chain:#7FA7EA; --chain-soft:#1A2740;
+  --good:#5BCB92; --good-soft:#163527; --warn:#E3A84C; --warn-soft:#33260F; --bad:#F07A73; --bad-soft:#3A1A19;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#9085e9;
+  --guill:rgba(79,194,154,.10); --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.25); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --paper:#0B1412; --surface:#111D1A; --surface-2:#16251F; --rule:#24362F;
+  --ink:#E6EFEA; --ink-2:#A9BBB3; --ink-3:#768A82;
+  --primary:#4FC29A; --primary-ink:#06231A; --primary-soft:#173A2F;
+  --brass:#D9B26A; --brass-soft:#2E2617; --chain:#7FA7EA; --chain-soft:#1A2740;
+  --good:#5BCB92; --good-soft:#163527; --warn:#E3A84C; --warn-soft:#33260F; --bad:#F07A73; --bad-soft:#3A1A19;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#9085e9;
+  --guill:rgba(79,194,154,.10); --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.25); color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);font-weight:650;letter-spacing:-.015em;margin:0;text-wrap:balance}
+h2{font-size:clamp(22px,2.6vw,30px);line-height:1.15}
+h3{font-size:17px}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.muted{color:var(--ink-2)} .faint{color:var(--ink-3)}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--chain);outline-offset:2px;border-radius:6px}
+
+/* header */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in oklab,var(--surface) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
+.bar{display:flex;align-items:center;gap:18px;min-height:64px;flex-wrap:wrap;padding-block:10px}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand b{font-family:var(--f-display);font-size:20px;letter-spacing:-.02em}
+.seal-mini{width:30px;height:30px}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;font-size:12.5px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 var(--good);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in oklab,var(--good) 50%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+select{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:7px 30px 7px 11px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+.btn{border:1px solid var(--rule);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:8px;font-weight:500;font-size:14px;display:inline-flex;align-items:center;gap:8px;transition:background .15s,border-color .15s,transform .05s}
+.btn:hover{border-color:var(--ink-3)} .btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn svg{width:16px;height:16px}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:0;margin-top:-2px}
+nav.tabs button{background:none;border:0;padding:10px 14px 12px;color:var(--ink-2);font-weight:500;border-bottom:2px solid transparent;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--primary)}
+nav.tabs button .k{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);margin-left:6px}
+
+main{padding-block:40px 80px}
+section.view{display:grid;gap:40px;grid-template-columns:minmax(0,1fr)}
+[hidden]{display:none!important}
+.shield-wrap{overflow:hidden;padding-block:6px}
+.lede{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:40px;align-items:end;position:relative}
+.lede p{max-width:60ch;margin:12px 0 0}
+#guilloche{position:absolute;right:-20px;top:-40px;width:340px;height:340px;pointer-events:none;opacity:1}
+.verdict{display:flex;gap:14px;align-items:flex-start;padding:16px 18px;border-radius:var(--r);background:var(--good-soft);color:var(--ink)}
+.verdict.bad{background:var(--bad-soft)}
+.verdict .ic{width:22px;height:22px;flex:none;margin-top:1px}
+
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.kpi{padding:22px 20px;display:grid;gap:6px;border-left:1px solid var(--rule)}
+.kpi:first-child{border-left:0;padding-left:0}
+.kpi .v{font-family:var(--f-display);font-size:clamp(26px,3vw,36px);line-height:1;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .v small{font-family:var(--f-body);font-size:13px;font-weight:500;color:var(--ink-3);margin-left:4px;letter-spacing:0}
+.kpi .s{font-size:12.5px;color:var(--ink-3)}
+
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:18px}
+
+/* obligations */
+.obl{display:grid;gap:22px}
+.ob{display:grid;gap:10px}
+.ob-top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.ob-name{font-weight:600}
+.prio{font-family:var(--f-mono);font-size:11px;padding:2px 7px;border-radius:5px;background:var(--surface-2);color:var(--ink-2);margin-right:8px}
+.meter{height:10px;border-radius:999px;background:var(--surface-2);overflow:hidden;display:flex}
+.meter span{display:block;height:100%}
+.meter .cov{background:var(--primary);border-radius:999px 0 0 999px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.meter .gap{background:repeating-linear-gradient(135deg,var(--bad) 0 4px,color-mix(in oklab,var(--bad) 35%,transparent) 4px 8px)}
+.ob-meta{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--ink-2);flex-wrap:wrap}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600}
+.status svg{width:14px;height:14px}
+.status.ok{color:var(--good)} .status.short{color:var(--bad)} .status.warn{color:var(--warn)}
+.diag{font-size:13px;background:var(--bad-soft);border-radius:8px;padding:10px 12px;color:var(--ink)}
+
+/* inventory */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;text-align:left;padding:0 10px 10px;border-bottom:1px solid var(--rule)}
+td{padding:13px 10px;border-bottom:1px solid var(--rule);vertical-align:middle}
+td.r,th.r{text-align:right}
+tr:last-child td{border-bottom:0}
+.cls{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2)}
+.sw{width:9px;height:9px;border-radius:3px;display:inline-block}
+.stack{height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;display:flex;min-width:90px}
+.stack i{display:block;height:100%}
+.tbl-wrap{overflow-x:auto}
+
+/* plan list */
+.plan{display:grid;gap:28px}
+.plan-group h3{display:flex;gap:10px;align-items:baseline;margin-bottom:8px}
+.line{display:grid;grid-template-columns:minmax(0,1.2fr) 90px 110px minmax(0,1.6fr);gap:16px;padding:11px 0;border-top:1px solid var(--rule);font-size:14px;align-items:baseline}
+.line .why{color:var(--ink-2);font-size:13px}
+.shadow{font-size:12.5px;color:var(--brass);font-weight:500}
+
+/* solve log */
+.log{font-family:var(--f-mono);font-size:12.5px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:14px 16px;min-height:92px;color:var(--ink-2);white-space:pre-wrap}
+.log .ok{color:var(--good)}
+
+/* flow */
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:9px;padding:3px;background:var(--surface);flex-wrap:wrap}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:7px;color:var(--ink-2);font-size:13.5px;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--primary-soft);color:var(--ink)}
+.flow-card{background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:24px;overflow-x:auto}
+#sankey{display:block;min-width:720px;width:100%;height:auto}
+#sankey text{font-family:var(--f-body);font-size:12.5px;fill:var(--ink)}
+#sankey .sub{fill:var(--ink-3);font-size:11.5px;font-family:var(--f-mono)}
+#sankey path.link{fill:none;stroke-opacity:.42;transition:stroke-opacity .15s}
+#sankey path.link:hover,#sankey path.link.hl{stroke-opacity:.8}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--paper);padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;max-width:280px;box-shadow:var(--shadow);opacity:0;transition:opacity .1s}
+.tip b{font-weight:600}
+
+/* ledger */
+.chain{display:flex;gap:10px;overflow-x:auto;padding:6px 2px 14px;scroll-behavior:smooth}
+.blk{flex:none;width:148px;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--surface);display:grid;gap:3px;position:relative;animation:slidein .45s cubic-bezier(.2,.8,.2,1)}
+.blk::after{content:"";position:absolute;right:-11px;top:50%;width:10px;border-top:1px dashed var(--rule)}
+.blk:last-child::after{display:none}
+.blk .n{font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
+.blk .t{font-weight:600;font-size:13px}
+.blk .d{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk.res{border-color:color-mix(in oklab,var(--chain) 45%,var(--rule))} .blk.res .t{color:var(--chain)}
+.blk.com{border-color:color-mix(in oklab,var(--primary) 50%,var(--rule))} .blk.com .t{color:var(--primary)}
+.blk.rej{border-style:dashed;border-color:var(--bad);background:var(--bad-soft)} .blk.rej .t{color:var(--bad)}
+@keyframes slidein{from{transform:translateX(18px);opacity:.2}to{transform:none;opacity:1}}
+.seal{display:flex;gap:18px;align-items:center;padding:18px 20px;border:1px solid var(--rule);border-radius:14px;background:var(--surface)}
+.seal svg{width:64px;height:64px;flex:none}
+.copy{border:1px solid var(--rule);background:var(--surface-2);border-radius:6px;padding:3px 8px;font-size:12px;color:var(--ink-2)}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:5px}
+.tag.res{background:var(--chain-soft);color:var(--chain)} .tag.com{background:var(--primary-soft);color:var(--primary)} .tag.rej{background:var(--bad-soft);color:var(--bad)} .tag.reg{background:var(--surface-2);color:var(--ink-2)} .tag.cov{background:var(--brass-soft);color:var(--brass)}
+
+/* arena */
+.arena{display:grid;grid-template-columns:minmax(0,1fr) 220px minmax(0,1fr);gap:28px;align-items:start}
+.desk{background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:22px;display:grid;gap:12px;min-height:260px;align-content:start}
+.desk h3{display:flex;align-items:center;gap:8px}
+.attacks{display:grid;gap:10px}
+.atk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:11px 13px;color:var(--ink)}
+.atk:hover{border-color:var(--bad)}
+.atk b{display:block;font-size:14px}
+.atk span{font-size:12.5px;color:var(--ink-2)}
+.atk .res{font-size:12px;font-weight:600;color:var(--bad);display:flex;align-items:center;gap:5px}
+.shield-wrap{display:grid;justify-items:center;gap:10px;position:relative}
+#shield{width:150px;height:170px;transition:transform .2s}
+#shield .face{fill:var(--primary-soft);stroke:var(--primary);stroke-width:3;transition:fill .2s,stroke .2s}
+#shield.hit{animation:shake .4s}
+#shield.hit .face{fill:var(--bad-soft);stroke:var(--bad)}
+@keyframes shake{20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+.packet{position:absolute;width:14px;height:14px;border-radius:4px;background:var(--bad);top:46%;right:-120px;opacity:0}
+.packet.go{animation:fly .55s cubic-bezier(.4,0,.6,1) forwards}
+@keyframes fly{0%{right:-120px;opacity:1}85%{right:44%;opacity:1;transform:scale(1)}100%{right:46%;opacity:0;transform:scale(2.4)}}
+.stamp{min-height:64px;text-align:center;font-size:13px}
+.stamp .big{font-family:var(--f-display);font-size:20px;color:var(--bad);letter-spacing:.04em}
+.score{display:flex;gap:22px;justify-content:center;font-size:13px;color:var(--ink-2)}
+.score b{font-family:var(--f-display);font-size:22px;color:var(--ink);display:block;text-align:center}
+.held{display:grid;gap:8px;font-size:13.5px}
+.held div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--rule);padding-bottom:6px}
+
+/* compare */
+.charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px}
+.chart h3{font-size:15px;margin-bottom:4px}
+.chart svg{width:100%;height:auto;display:block}
+.chart text{font-family:var(--f-body);font-size:12px;fill:var(--ink-2)}
+.chart .val{font-family:var(--f-mono);fill:var(--ink);font-size:12px}
+
+.note{font-size:13px;color:var(--ink-3);max-width:70ch}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:11px 16px;border-radius:10px;font-size:14px;opacity:0;transition:all .25s;z-index:30;display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{padding:28px;border:1px dashed var(--rule);border-radius:12px;text-align:center;color:var(--ink-2)}
+
+@media (max-width:960px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .kpi{border-left:0;padding-left:0;border-top:1px solid var(--rule)} .kpi:nth-child(-n+2){border-top:0}
+  .two,.lede{grid-template-columns:minmax(0,1fr);gap:32px}
+  .arena{grid-template-columns:minmax(0,1fr)} .charts{grid-template-columns:minmax(0,1fr)}
+  .line{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px} .line .why{grid-column:1/-1}
+  #guilloche{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <div class="brand">
+        <svg class="seal-mini" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14.5" fill="none" stroke="var(--primary)" stroke-width="1.5"/><circle cx="16" cy="16" r="10" fill="none" stroke="var(--primary)" stroke-width="1" stroke-dasharray="2 2"/><path d="M11 16.5l3.2 3.2L21 13" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <b>PledgeGuard</b>
+      </div>
+      <label class="sr" for="scenario" style="position:absolute;left:-9999px">Scenario</label>
+      <select id="scenario" aria-label="Scenario">
+        <option value="REF">Tight inventory · 3 obligations</option>
+        <option value="REF_SHORT">Insufficient collateral · repo ₹70 cr</option>
+      </select>
+      <span class="chip" id="chainchip"><span class="dot"></span><span>Chain 31337 · block <span class="mono" id="blockno">7</span></span></span>
+      <button class="btn" id="btnReset" title="Reset chain (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
+      <button class="btn" id="btnOpt" title="Optimise (O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19h16M7 15l3-4 3 2 4-6"/></svg>Optimise</button>
+      <button class="btn primary" id="btnCommit" title="Commit to chain (C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Commit to chain</button>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" data-v="desk" aria-selected="true">Desk<span class="k">1</span></button>
+      <button role="tab" data-v="flow" aria-selected="false">Flow<span class="k">2</span></button>
+      <button role="tab" data-v="ledger" aria-selected="false">Ledger<span class="k">3</span></button>
+      <button role="tab" data-v="arena" aria-selected="false">Attack arena<span class="k">4</span></button>
+      <button role="tab" data-v="compare" aria-selected="false">Compare<span class="k">5</span></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- DESK -->
+<section class="view" id="v-desk">
+  <div class="lede">
+    <div>
+      <div class="eyebrow">Collateral desk · <span id="scnName">Tight inventory</span></div>
+      <h2 id="headline" style="margin-top:8px">All three obligations covered at ₹275.97 lakh a year</h2>
+      <p class="muted" id="subline">The optimiser posts cash to the clearing house and keeps scarce T-Bills and 2029 G-Secs for the repo, which accepts nothing else.</p>
+    </div>
+    <div>
+      <canvas id="guilloche" aria-hidden="true"></canvas>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="two">
+    <div>
+      <div class="panel-head"><h3>Obligations</h3><span class="faint" style="font-size:13px">Required vs covered after haircuts</span></div>
+      <div class="obl" id="obligations"></div>
+    </div>
+    <div>
+      <div class="panel-head"><h3>Vault inventory</h3><span class="faint" style="font-size:13px"><span class="sw" style="background:var(--chain)"></span> pledged on-chain · <span class="sw" style="background:var(--surface-2);outline:1px solid var(--rule)"></span> free</span></div>
+      <div class="tbl-wrap"><table id="inventory"></table></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel-head"><h3>Recommended plan</h3><span class="faint" style="font-size:13px">1 unit = ₹1 lakh face value</span></div>
+    <div class="plan" id="plan"></div>
+  </div>
+</section>
+
+<!-- FLOW -->
+<section class="view" id="v-flow" hidden>
+  <div class="lede" style="align-items:start">
+    <div>
+      <div class="eyebrow">Where the collateral goes</div>
+      <h2 style="margin-top:8px">See how each strategy spends the inventory</h2>
+      <p class="muted">Band width is collateral value after haircut. Switch strategies to watch a greedy rule use up the only assets the repo accepts.</p>
+    </div>
+    <div style="display:grid;gap:12px;justify-items:start">
+      <div class="seg" id="methodSeg" role="group" aria-label="Strategy">
+        <button data-m="optimiser" aria-pressed="true">Optimiser</button>
+        <button data-m="cheapest_first" aria-pressed="false">Cheapest first</button>
+        <button data-m="cash_first" aria-pressed="false">Cash first</button>
+        <button data-m="scarcity_aware" aria-pressed="false">Scarcity-aware</button>
+      </div>
+      <div id="flowVerdict" class="verdict"></div>
+    </div>
+  </div>
+  <div class="flow-card"><svg id="sankey" viewBox="0 0 980 480" role="img" aria-label="Allocation flow from assets to obligations"></svg></div>
+  <div class="legend" id="legend"></div>
+</section>
+
+<!-- LEDGER -->
+<section class="view" id="v-ledger" hidden>
+  <div class="lede" style="align-items:start">
+    <div>
+      <div class="eyebrow">CollateralLedger · local Hardhat chain</div>
+      <h2 style="margin-top:8px">Every pledge, release and rejected attempt, in order</h2>
+      <p class="muted">Reservations live on-chain. Rejected attempts revert, so they leave no event; the gateway logs them here so nothing goes unseen.</p>
+    </div>
+    <div class="seal" id="seal"></div>
+  </div>
+  <div>
+    <div class="eyebrow" style="margin-bottom:10px">Latest blocks</div>
+    <div class="chain" id="chainStrip"></div>
+  </div>
+  <div class="tbl-wrap"><table id="audit"></table></div>
+</section>
+
+<!-- ARENA -->
+<section class="view" id="v-arena" hidden>
+  <div>
+    <div class="eyebrow">Double-pledge defence</div>
+    <h2 style="margin-top:8px">Try to break the ledger</h2>
+    <p class="muted" style="max-width:62ch;margin-top:10px">Desk 2 has the same permissions as the allocator. Only the contract's rules stand between it and the collateral already pledged.</p>
+  </div>
+  <div class="arena">
+    <div class="desk">
+      <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Desk 1 · Allocator</h3>
+      <div class="faint" style="font-size:13px" id="deskState">Committed plan, held on-chain</div>
+      <div class="held" id="held"></div>
+    </div>
+    <div class="shield-wrap">
+      <svg id="shield" viewBox="0 0 150 170" aria-hidden="true"><path class="face" d="M75 8l60 20v48c0 40-26 68-60 84C41 144 15 116 15 76V28z"/><path d="M52 86l16 16 31-34" fill="none" stroke="var(--primary)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" id="shieldMark"/></svg>
+      <div class="packet" id="packet"></div>
+      <div class="stamp" id="stamp" aria-live="polite"><span class="faint">Pick an attack</span></div>
+      <div class="score"><div><b id="sAtt">0</b>attempted</div><div><b id="sBlk">0</b>blocked</div></div>
+    </div>
+    <div class="desk">
+      <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bad)" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/><path d="M17 3l4 4M21 3l-4 4"/></svg>Desk 2 · Attacker</h3>
+      <div class="attacks" id="attacks"></div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="view" id="v-compare" hidden>
+  <div class="lede" style="align-items:start">
+    <div>
+      <div class="eyebrow">Optimiser vs simple rules</div>
+      <h2 style="margin-top:8px" id="cmpHead">Same inventory, four strategies</h2>
+      <p class="muted">Effective cost adds the price of the shortfall (9% a year emergency funding), so a rule that leaves gaps cannot look cheap.</p>
+    </div>
+    <div class="verdict" id="cmpVerdict"></div>
+  </div>
+  <div class="charts" id="charts"></div>
+  <div class="tbl-wrap"><table id="cmpTable"></table></div>
+  <p class="note">Benchmark on 100 synthetic portfolios per demand level (tight, 85% of capacity): cheapest-first left an obligation short in 79 cases, the optimiser in 9, each of which no allocation could have covered.</p>
+</section>
+
+</main>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// ---------- data (real solver output for the reference scenario) ----------
+const ASSETS=[
+ {id:"CASH",name:"Cash (INR)",cls:"CASH",qty:3000,price:10000,cost:650},
+ {id:"TBILL_91D",name:"91-day T-Bill",cls:"TBILL",qty:2000,price:10000,cost:120},
+ {id:"GSEC_2029",name:"G-Sec 2029",cls:"GSEC_MID",qty:4000,price:10000,cost:90},
+ {id:"GSEC_2034",name:"G-Sec 2034",cls:"GSEC_LONG",qty:3000,price:10000,cost:80},
+ {id:"CORP_AAA_2028",name:"AAA corporate 2028",cls:"CORP_AAA",qty:2000,price:10000,cost:50},
+ {id:"NIFTY50_BASKET",name:"Nifty-50 basket",cls:"EQUITY",qty:2500,price:10000,cost:35}];
+const CLS={CASH:{label:"Cash",c:"--c1"},TBILL:{label:"T-Bill",c:"--c2"},GSEC_MID:{label:"G-Sec 1–5y",c:"--c3"},GSEC_LONG:{label:"G-Sec >5y",c:"--c4"},CORP_AAA:{label:"AAA corporate",c:"--c5"},EQUITY:{label:"Index equity",c:"--c6"}};
+const HC={CASH:0,TBILL:50,GSEC_MID:200,GSEC_LONG:400,CORP_AAA:400,EQUITY:1500};
+const ELIG={O1:["CASH","TBILL","GSEC_MID","GSEC_LONG"],O2:["GSEC_MID","GSEC_LONG","CORP_AAA","EQUITY"],O3:["TBILL","GSEC_MID"]};
+const SCEN={
+ REF:{name:"Tight inventory",obl:[{id:"O1",name:"CCP initial margin",cp:"CCIL",req:6000,p:1},{id:"O2",name:"Bilateral OTC margin",cp:"Counterparty Bank B",req:4500,p:2},{id:"O3",name:"Bank repo",cp:"Lender Bank A",req:5000,p:3}]},
+ REF_SHORT:{name:"Insufficient collateral",obl:[{id:"O1",name:"CCP initial margin",cp:"CCIL",req:6000,p:1},{id:"O2",name:"Bilateral OTC margin",cp:"Counterparty Bank B",req:4500,p:2},{id:"O3",name:"Bank repo",cp:"Lender Bank A",req:7000,p:3}]}};
+const PLANS={"REF":{"optimiser":[["CASH","O1",2665],["TBILL_91D","O1",756],["GSEC_2029","O1",19],["GSEC_2034","O1",2671],["GSEC_2029","O2",142],["GSEC_2034","O2",329],["CORP_AAA_2028","O2",2000],["NIFTY50_BASKET","O2",2500],["TBILL_91D","O3",1244],["GSEC_2029","O3",3839]],"cheapest_first":[["GSEC_2034","O1",3000],["GSEC_2029","O1",3184],["NIFTY50_BASKET","O2",2500],["CORP_AAA_2028","O2",2000],["GSEC_2029","O2",465],["GSEC_2029","O3",351],["TBILL_91D","O3",2000]],"cash_first":[["CASH","O1",3000],["TBILL_91D","O1",2000],["GSEC_2029","O1",1031],["GSEC_2029","O2",2969],["GSEC_2034","O2",1657]],"scarcity_aware":[["TBILL_91D","O3",2000],["GSEC_2029","O3",3072],["CASH","O1",3000],["GSEC_2034","O1",3000],["GSEC_2029","O1",123],["NIFTY50_BASKET","O2",2500],["CORP_AAA_2028","O2",2000],["GSEC_2029","O2",465]]},"REF_SHORT":{"optimiser":[["CASH","O1",3000],["TBILL_91D","O1",55],["GSEC_2029","O1",101],["GSEC_2034","O1",2965],["GSEC_2029","O2",430],["GSEC_2034","O2",35],["CORP_AAA_2028","O2",2000],["NIFTY50_BASKET","O2",2500],["TBILL_91D","O3",1945],["GSEC_2029","O3",3469]],"cheapest_first":[["GSEC_2034","O1",3000],["GSEC_2029","O1",3184],["NIFTY50_BASKET","O2",2500],["CORP_AAA_2028","O2",2000],["GSEC_2029","O2",465],["GSEC_2029","O3",351],["TBILL_91D","O3",2000]],"cash_first":[["CASH","O1",3000],["TBILL_91D","O1",2000],["GSEC_2029","O1",1031],["GSEC_2029","O2",2969],["GSEC_2034","O2",1657]],"scarcity_aware":[["TBILL_91D","O3",2000],["GSEC_2029","O3",4000],["CASH","O1",3000],["GSEC_2034","O1",3000],["NIFTY50_BASKET","O2",2500],["CORP_AAA_2028","O2",2000]]}};
+const META={REF:{shadow:6.49,headroom:2.16},REF_SHORT:{shadow:9.0,headroom:-14.2}};
+const METHODS={optimiser:"Optimiser",cheapest_first:"Cheapest first",cash_first:"Cash first",scarcity_aware:"Scarcity-aware"};
+const A=Object.fromEntries(ASSETS.map(a=>[a.id,a]));
+
+// ---------- helpers ----------
+const $=s=>document.querySelector(s);
+const inr=(n,d=2)=>Number(n).toLocaleString("en-IN",{minimumFractionDigits:d,maximumFractionDigits:d});
+const cr=l=>inr(l/100,2);
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const hex=()=> "0x"+Array.from({length:64},()=>"0123456789abcdef"[Math.random()*16|0]).join("");
+const short=h=>h.slice(0,6)+"…"+h.slice(-4);
+const ICON={ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+ x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+ warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></svg>'};
+
+function evaluate(sid, method){
+  const obl=SCEN[sid].obl, lines=PLANS[sid][method].map(([a,o,u])=>{
+    const as=A[a], h=HC[as.cls], mv=u*as.price/1e4, us=u*as.price*(10000-h)/1e8, cost=mv*as.cost/1e4;
+    return {a,o,u,mv,h,us,cost}});
+  const cov=obl.map(ob=>{const c=lines.filter(l=>l.o===ob.id).reduce((s,l)=>s+l.us,0);return {...ob,covered:c,short:Math.max(0,ob.req-c)}});
+  const used={}; lines.forEach(l=>used[l.a]=(used[l.a]||0)+l.u);
+  const fund=lines.reduce((s,l)=>s+l.cost,0), sh=cov.reduce((s,c)=>s+c.short,0);
+  const tot=ASSETS.reduce((s,a)=>s+a.qty,0), util=Object.values(used).reduce((s,v)=>s+v,0)/tot*100;
+  // reasons
+  lines.forEach(l=>{
+    const elig=ASSETS.filter(x=>ELIG[l.o].includes(x.cls));
+    const cheaper=elig.filter(x=>x.cost<A[l.a].cost && (used[x.id]||0)>=x.qty);
+    const elsewhere=cheaper.map(x=>({x,to:lines.find(k=>k.a===x.id&&k.o!==l.o)})).find(z=>z.to);
+    if(elsewhere) l.why=`Cheaper ${A[elsewhere.x.id].name} is committed to ${elsewhere.to.o}, which accepts fewer asset types.`;
+    else if(cheaper.length) l.why=`Cheaper eligible assets are already fully used for ${l.o}.`;
+    else l.why=`Cheapest asset ${l.o} accepts that is still free.`;
+  });
+  return {lines,cov,used,fund,sh,eff:fund+sh*0.09,util};
+}
+
+// ---------- state ----------
+const S={sid:"REF",method:"optimiser",view:"desk",committed:false,block:7,ver:{},reserved:{},events:[],att:0,blk:0,planHash:null,allocId:null};
+function resetChain(silent){
+  S.committed=false;S.block=1;S.ver={};S.reserved={};S.events=[];S.planHash=null;S.allocId=null;S.att=0;S.blk=0;
+  ASSETS.forEach(a=>{S.ver[a.id]=1;S.reserved[a.id]=0;S.block++;S.events.push({type:"AssetRegistered",asset:a.id,units:a.qty,block:S.block,tx:hex(),actor:"Custodian",on:true})});
+  S.block++;S.events.push({type:"EligibilitySet",asset:"—",obl:"O1 · O2 · O3",block:S.block,tx:hex(),actor:"Rules admin",on:true});
+  if(!silent) toast("Chain reset and seeded from the scenario");
+  renderAll();
+}
+
+// ---------- render: desk ----------
+function renderDesk(){
+  const sid=S.sid, r=evaluate(sid,"optimiser"), obl=r.cov, m=META[sid];
+  $("#scnName").textContent=SCEN[sid].name;
+  const covered=obl.filter(o=>o.short<0.005).length;
+  if(r.sh<0.005){ $("#headline").textContent=`All ${obl.length===3?"three":obl.length} obligations covered at ₹${inr(r.fund)} lakh a year`;
+    $("#subline").textContent="The optimiser posts cash to the clearing house and keeps scarce T-Bills and 2029 G-Secs for the repo, which accepts nothing else."; }
+  else { const s=obl.find(o=>o.short>0);
+    $("#headline").textContent=`${s.name} is short by ₹${inr(s.short)} lakh; the clearing house and OTC margin are protected`;
+    $("#subline").textContent="There is not enough eligible collateral for every obligation, so the shortfall falls on the lowest-priority obligation and is reported exactly."; }
+  const kp=[
+    ["Funding cost",`₹${inr(r.fund)}<small>lakh/yr</small>`,"Opportunity cost of pledged assets"],
+    ["Shortfall", r.sh<0.005?`<span style="color:var(--good)">₹0</span>`:`<span style="color:var(--bad)">₹${inr(r.sh)}</span><small>lakh</small>`, r.sh<0.005?"Every requirement met":"Reported, never hidden"],
+    ["Utilisation",`${inr(r.util,1)}<small>%</small>`,"Of inventory market value"],
+    ["Covered",`${covered}<small>of ${obl.length}</small>`,"Obligations fully secured"],
+    ["Headroom", m.headroom>=0?`${inr(m.headroom,2)}<small>%</small>`:`<span style="color:var(--bad)">none</span>`, m.headroom>=0?"Requirements can grow this much":"Already beyond capacity"]];
+  $("#kpis").innerHTML=kp.map(k=>`<div class="kpi"><span class="eyebrow">${k[0]}</span><span class="v">${k[1]}</span><span class="s">${k[2]}</span></div>`).join("");
+
+  $("#obligations").innerHTML=obl.map(o=>{
+    const pct=Math.min(100,o.covered/o.req*100), gap=o.short>0?o.short/o.req*100:0, ok=o.short<0.005;
+    return `<div class="ob">
+      <div class="ob-top"><div><span class="prio">P${o.p}</span><span class="ob-name">${o.name}</span> <span class="faint" style="font-size:13px">· ${o.cp}</span></div>
+      <span class="status ${ok?"ok":"short"}">${ok?ICON.ok+"Secured":ICON.x+"Short"}</span></div>
+      <div class="meter" role="img" aria-label="${o.name}: ${inr(pct,1)}% covered"><span class="cov" style="width:${ok?100:pct}%"></span>${gap?`<span class="gap" style="width:${gap}%"></span>`:""}</div>
+      <div class="ob-meta"><span class="num">₹${inr(o.covered)} of ₹${inr(o.req,0)} lakh</span>${ok?`<span class="shadow">+₹1 cr here costs ₹${inr(m.shadow)} L/yr</span>`:`<span style="color:var(--bad);font-weight:600" class="num">gap ₹${inr(o.short)} lakh</span>`}</div>
+      ${ok?"":`<div class="diag"><b>Why short:</b> eligible T-Bills and 2029 G-Secs are needed by higher-priority obligations (O1, O2). Cheapest fix: add ≈ ₹${cr(o.short/0.995)} cr face of 91-day T-Bills.</div>`}
+    </div>`}).join("");
+
+  $("#inventory").innerHTML=`<thead><tr><th>Asset</th><th class="r">Units</th><th class="r">Haircut</th><th class="r">Cost</th><th>On-chain</th></tr></thead><tbody>`+
+    ASSETS.map(a=>{const res=S.reserved[a.id]||0, free=a.qty-res, p=res/a.qty*100;
+      return `<tr><td><div style="font-weight:500">${a.name}</div><span class="cls"><span class="sw" style="background:var(${CLS[a.cls].c})"></span>${CLS[a.cls].label}</span></td>
+      <td class="r num">${inr(a.qty,0)}</td><td class="r num">${(HC[a.cls]/100).toFixed(1)}%</td><td class="r num">${(a.cost/100).toFixed(2)}%</td>
+      <td><div class="stack" title="${inr(res,0)} pledged · ${inr(free,0)} free"><i style="width:${p}%;background:var(--chain)"></i></div>
+      <div class="faint num" style="font-size:12px;margin-top:4px">${free===0?"fully pledged":inr(free,0)+" free"} · v${S.ver[a.id]}</div></td></tr>`}).join("")+`</tbody>`;
+
+  const groups=obl.map(o=>{const ls=r.lines.filter(l=>l.o===o.id);
+    return `<div class="plan-group"><h3>${o.name}<span class="faint" style="font-size:13px;font-family:var(--f-body);font-weight:400">${o.id} · ${ls.length} line${ls.length>1?"s":""}</span></h3>
+    ${ls.map(l=>`<div class="line"><span><span class="sw" style="background:var(${CLS[A[l.a].cls].c})"></span> ${A[l.a].name}</span><span class="num r">${inr(l.u,0)} u</span><span class="num r">₹${inr(l.us)} L</span><span class="why">${l.why}</span></div>`).join("")}</div>`}).join("");
+  $("#plan").innerHTML=groups;
+}
+
+// ---------- render: flow (hand-built sankey) ----------
+function renderFlow(){
+  const r=evaluate(S.sid,S.method), svg=$("#sankey"), W=980,H=480, pad=26, nw=14, gapN=14;
+  document.querySelectorAll("#methodSeg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.m===S.method));
+  const left=ASSETS.map(a=>({id:a.id,v:r.lines.filter(l=>l.a===a.id).reduce((s,l)=>s+l.us,0)})).filter(n=>n.v>0);
+  const right=r.cov.map(o=>({id:o.id,v:o.req,cov:o.covered,short:o.short}));
+  const totL=left.reduce((s,n)=>s+n.v,0), totR=right.reduce((s,n)=>s+n.v,0);
+  const k=(H-2*pad-gapN*Math.max(left.length,right.length))/Math.max(totL,totR);
+  let y=pad; left.forEach(n=>{n.y=y;n.h=n.v*k;n.off=0;y+=n.h+gapN});
+  y=pad; right.forEach(n=>{n.y=y;n.h=n.v*k;n.off=0;y+=n.h+gapN});
+  const xl=200, xr=W-240;
+  let out="";
+  const order=[...r.lines].sort((p,q)=>right.findIndex(n=>n.id===p.o)-right.findIndex(n=>n.id===q.o));
+  order.forEach(l=>{const L=left.find(n=>n.id===l.a),R=right.find(n=>n.id===l.o),th=l.us*k;
+    const y0=L.y+L.off+th/2, y1=R.y+R.off+th/2; L.off+=th; R.off+=th;
+    const c=css(CLS[A[l.a].cls].c), mx=(xl+nw+xr)/2;
+    out+=`<path class="link" d="M${xl+nw},${y0} C${mx},${y0} ${mx},${y1} ${xr},${y1}" stroke="${c}" stroke-width="${Math.max(1.5,th)}" data-a="${l.a}" data-o="${l.o}" data-u="${l.u}" data-mv="${l.mv}" data-h="${l.h}" data-us="${l.us}" data-c="${l.cost}" data-why="${(l.why||"").replace(/"/g,"&quot;")}"></path>`});
+  left.forEach(n=>{const a=A[n.id];out+=`<rect x="${xl}" y="${n.y}" width="${nw}" height="${Math.max(2,n.h)}" rx="3" fill="${css(CLS[a.cls].c)}"></rect>
+    <text x="${xl-12}" y="${n.y+n.h/2-2}" text-anchor="end">${a.name}</text><text class="sub" x="${xl-12}" y="${n.y+n.h/2+14}" text-anchor="end">₹${inr(n.v,0)} L usable</text>`});
+  right.forEach(n=>{const o=SCEN[S.sid].obl.find(x=>x.id===n.id), ch=n.cov*k;
+    out+=`<rect x="${xr}" y="${n.y}" width="${nw}" height="${Math.max(2,Math.min(n.h,ch))}" rx="3" fill="${css("--primary")}"></rect>`;
+    if(n.short>0.5){out+=`<rect x="${xr}" y="${n.y+ch}" width="${nw}" height="${n.short*k}" rx="3" fill="none" stroke="${css("--bad")}" stroke-width="1.6" stroke-dasharray="4 3"></rect>`}
+    out+=`<text x="${xr+nw+12}" y="${n.y+Math.min(n.h,22)/2+6}">${o.name}</text><text class="sub" x="${xr+nw+12}" y="${n.y+Math.min(n.h,22)/2+22}">₹${inr(n.cov,0)} of ₹${inr(n.v,0)} L</text>`;
+    if(n.short>0.5) out+=`<text x="${xr+nw+12}" y="${n.y+Math.min(n.h,22)/2+40}" style="fill:${css("--bad")};font-weight:600">gap ₹${inr(n.short,0)} L</text>`;
+  });
+  svg.innerHTML=out;
+  const v=$("#flowVerdict"), s=r.cov.filter(c=>c.short>0.5);
+  v.className="verdict"+(s.length?" bad":"");
+  v.innerHTML=(s.length?`<span class="ic" style="color:var(--bad)">${ICON.x}</span><div><b>${METHODS[S.method]}</b> leaves ${s.map(c=>`${c.name} short by ₹${inr(c.short)} lakh`).join(" and ")}.</div>`
+    :`<span class="ic" style="color:var(--good)">${ICON.ok}</span><div><b>${METHODS[S.method]}</b> covers every obligation at ₹${inr(r.fund)} lakh a year.</div>`);
+  $("#legend").innerHTML=Object.entries(CLS).map(([k,c])=>`<span><span class="sw" style="background:var(${c.c})"></span> ${c.label}</span>`).join("")+`<span><span class="sw" style="outline:1.5px dashed var(--bad);background:transparent"></span> uncovered gap</span>`;
+  svg.querySelectorAll("path.link").forEach(p=>{
+    p.addEventListener("mousemove",e=>{const d=p.dataset;showTip(e,`<b>${A[d.a].name} → ${d.o}</b><br>${inr(d.u,0)} units · market ₹${inr(d.mv)} L<br>haircut ${(d.h/100).toFixed(1)}% · usable ₹${inr(d.us)} L<br>cost ₹${inr(d.c)} L/yr${S.method==="optimiser"?`<br><span style="opacity:.8">${d.why}</span>`:""}`)});
+    p.addEventListener("mouseleave",hideTip)});
+}
+function showTip(e,h){const t=$("#tip");t.innerHTML=h;t.style.opacity=1;const x=Math.min(e.clientX+14,innerWidth-300);t.style.left=x+"px";t.style.top=(e.clientY+14)+"px"}
+function hideTip(){$("#tip").style.opacity=0}
+
+// ---------- render: ledger ----------
+function renderLedger(){
+  const ev=[...S.events].reverse();
+  $("#chainStrip").innerHTML=S.events.slice(-14).map(e=>{const c=e.type==="Rejected"?"rej":e.type==="Reserved"?"res":e.type==="AllocationCommitted"||e.type==="CoverageRecorded"?"com":"";
+    return `<div class="blk ${c}"><span class="n">${e.on?"#"+e.block:"off-chain"}</span><span class="t">${e.type==="Rejected"?"✗ "+e.reason:e.type}</span><span class="d">${e.asset||""}${e.obl?" → "+e.obl:""}${e.units?" · "+inr(e.units,0)+" u":""}</span></div>`}).join("");
+  const st=$("#chainStrip"); st.scrollLeft=st.scrollWidth;
+  const tagOf=t=>t==="Rejected"?"rej":t==="Reserved"?"res":t==="AllocationCommitted"?"com":t==="CoverageRecorded"?"cov":"reg";
+  $("#audit").innerHTML=`<thead><tr><th>Event</th><th>Asset</th><th>Obligation</th><th class="r">Units</th><th class="r">Free after</th><th>Actor</th><th>Tx / reason</th><th class="r">Block</th></tr></thead><tbody>`+
+    ev.map(e=>`<tr><td><span class="tag ${tagOf(e.type)}">${e.type==="Rejected"?ICON.x.replace('viewBox','width="12" height="12" viewBox'):""}${e.type}</span></td><td class="mono" style="font-size:13px">${e.asset||"—"}</td><td>${e.obl||"—"}</td>
+    <td class="r num">${e.units?inr(e.units,0):"—"}</td><td class="r num">${e.free!=null?inr(e.free,0):"—"}</td><td>${e.actor}</td>
+    <td class="${e.type==="Rejected"?"":"mono"}" style="font-size:12.5px;${e.type==="Rejected"?"color:var(--bad)":""}">${e.type==="Rejected"?e.reason+(e.args?` <span class="faint">(${e.args})</span>`:""):short(e.tx)}</td><td class="r num">${e.on?e.block:"—"}</td></tr>`).join("")+`</tbody>`;
+  $("#seal").innerHTML=S.committed?`<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="1.5"/><circle cx="32" cy="32" r="23" fill="none" stroke="var(--primary)" stroke-dasharray="1.5 2.5"/><path d="M22 33l7 7 14-15" fill="none" stroke="var(--primary)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div style="min-width:0"><div class="eyebrow">Plan hash · allocation ${S.allocId}</div><div class="mono" style="font-size:13px;word-break:break-all;margin:4px 0 8px">${S.planHash}</div><button class="copy" id="copyHash">Copy hash</button>
+    <div class="faint" style="font-size:12.5px;margin-top:8px">Anyone with the inputs can re-run the solver and reproduce this hash.</div></div>`
+    :`<div class="empty" style="width:100%">No plan committed yet. Use <b>Commit to chain</b> to seal the optimiser's plan.</div>`;
+  const cb=$("#copyHash"); if(cb) cb.onclick=()=>{navigator.clipboard.writeText(S.planHash).then(()=>toast("Plan hash copied")).catch(()=>toast("Copy blocked; select the hash text instead"))};
+}
+
+// ---------- render: arena ----------
+const ATTACKS=[
+ {k:"double_pledge",t:"Double pledge",d:"Pledge free + 1 units of cash to the OTC margin"},
+ {k:"duplicate",t:"Duplicate plan",d:"Re-send the committed allocation id"},
+ {k:"excessive",t:"Excessive quantity",d:"Ask for more AAA bonds than exist"},
+ {k:"ineligible",t:"Ineligible asset",d:"Put Nifty-50 shares into the bank repo"},
+ {k:"stale",t:"Stale plan",d:"Commit against an outdated inventory version"}];
+function renderArena(){
+  const r=evaluate(S.sid,"optimiser");
+  $("#deskState").textContent=S.committed?`Allocation ${S.allocId} sealed on-chain`:"No plan committed yet: the first attack commits the optimiser's plan for you";
+  $("#held").innerHTML=r.cov.map(o=>`<div><span>${o.name}</span><span class="num">₹${inr(o.covered,0)} L</span></div>`).join("")+
+   `<div><span class="faint">Cash still free</span><span class="num">${inr(ASSETS[0].qty-(S.reserved.CASH||0),0)} u</span></div>`;
+  $("#attacks").innerHTML=ATTACKS.map(a=>`<button class="atk" data-k="${a.k}"><span><b>${a.t}</b><span>${a.d}</span></span><span class="res" id="r-${a.k}"></span></button>`).join("");
+  $("#sAtt").textContent=S.att;$("#sBlk").textContent=S.blk;
+  document.querySelectorAll(".atk").forEach(b=>b.onclick=()=>attack(b.dataset.k));
+}
+function attack(k){
+  if(!S.committed) commit(true);
+  const free=a=>A[a].qty-(S.reserved[a]||0);
+  const R={double_pledge:["InsufficientQuantity",`CASH · requested ${free("CASH")+1} · available ${free("CASH")}`,"CASH","O2"],
+    duplicate:["DuplicateAllocation",S.allocId,"—","—"],
+    excessive:["InsufficientQuantity",`CORP_AAA_2028 · requested ${A.CORP_AAA_2028.qty+1} · available ${free("CORP_AAA_2028")}`,"CORP_AAA_2028","O2"],
+    ineligible:["Ineligible","NIFTY50_BASKET · O3","NIFTY50_BASKET","O3"],
+    stale:["StalePlan",`CASH · expected v${S.ver.CASH-1} · actual v${S.ver.CASH}`,"CASH","O1"]}[k];
+  S.att++;
+  const pk=$("#packet"); pk.classList.remove("go"); void pk.offsetWidth; pk.classList.add("go");
+  setTimeout(()=>{
+    const sh=$("#shield"); sh.classList.remove("hit"); void sh.offsetWidth; sh.classList.add("hit");
+    S.blk++; S.events.push({type:"Rejected",reason:R[0],args:R[1],asset:R[2],obl:R[3],actor:"Desk 2",on:false});
+    $("#stamp").innerHTML=`<div class="big">BLOCKED</div><div><b>${R[0]}</b></div><div class="faint mono" style="font-size:12px">${R[1]}</div>`;
+    $("#sAtt").textContent=S.att;$("#sBlk").textContent=S.blk;
+    const el=$("#r-"+k); if(el) el.innerHTML=ICON.x.replace('viewBox','width="13" height="13" viewBox')+R[0];
+    toast(`Rejected by the contract: ${R[0]}`);
+  },matchMedia("(prefers-reduced-motion: reduce)").matches?0:520);
+}
+
+// ---------- render: compare ----------
+function renderCompare(){
+  const rows=Object.keys(METHODS).map(m=>({m,...evaluate(S.sid,m)}));
+  const best=rows[0];
+  const worst=rows.filter(r=>r.sh>0.5).sort((a,b)=>b.sh-a.sh)[0];
+  const cv=$("#cmpVerdict");
+  cv.className="verdict"+(best.sh>0.5?" bad":"");
+  cv.innerHTML=best.sh<0.5
+   ? `<span class="ic" style="color:var(--good)">${ICON.ok}</span><div>The optimiser covers every obligation. ${rows.filter(r=>r.sh>0.5).map(r=>`${METHODS[r.m]} leaves ₹${inr(r.sh,0)} lakh uncovered`).join("; ")}.</div>`
+   : `<span class="ic" style="color:var(--bad)">${ICON.warn}</span><div>No strategy can cover everything here. The optimiser keeps the gap on the repo (P3) and protects the clearing house; scarcity-aware spreads it across all three.</div>`;
+  const metrics=[["Effective cost","eff","₹ lakh/yr",v=>inr(v,0)],["Shortfall","sh","₹ lakh",v=>inr(v,0)],["Utilisation","util","% of inventory",v=>inr(v,1)+"%"]];
+  $("#charts").innerHTML=metrics.map(([t,key,unit,f])=>{
+    const max=Math.max(...rows.map(r=>r[key]))||1, W=320,bh=26,g=14,H=rows.length*(bh+g)+6, lw=104;
+    const bars=rows.map((r,i)=>{const w=Math.max(2,(W-lw-60)*r[key]/max), y=i*(bh+g);
+      const col=r.m==="optimiser"?css("--primary"):(key==="sh"&&r.sh>0.5?css("--bad"):css("--ink-3"));
+      return `<text x="0" y="${y+bh/2+4}">${METHODS[r.m]}</text><rect x="${lw}" y="${y}" width="${w}" height="${bh}" rx="4" fill="${col}" opacity="${r.m==="optimiser"?1:.55}"></rect><text class="val" x="${lw+w+8}" y="${y+bh/2+4}">${f(r[key])}</text>`}).join("");
+    return `<div class="chart"><h3>${t}</h3><div class="faint" style="font-size:12.5px;margin-bottom:12px">${unit}${key==="util"?" · higher uses more of the vault":" · lower is better"}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t} by strategy">${bars}</svg></div>`}).join("");
+  $("#cmpTable").innerHTML=`<thead><tr><th>Strategy</th><th class="r">Funding cost</th><th class="r">Shortfall</th><th class="r">Effective cost</th><th class="r">Utilisation</th><th>Obligations short</th></tr></thead><tbody>`+
+   rows.map(r=>`<tr><td style="font-weight:${r.m==="optimiser"?600:400}">${METHODS[r.m]}</td><td class="r num">₹${inr(r.fund)}</td><td class="r num" style="color:${r.sh>0.5?"var(--bad)":"inherit"}">₹${inr(r.sh)}</td><td class="r num">₹${inr(r.eff)}</td><td class="r num">${inr(r.util,1)}%</td><td>${r.cov.filter(c=>c.short>0.5).map(c=>c.id).join(", ")||"none"}</td></tr>`).join("")+`</tbody>`;
+}
+
+// ---------- actions ----------
+function commit(silent){
+  if(S.committed){toast("Already committed: a second commit would be rejected as DuplicateAllocation");return}
+  const r=evaluate(S.sid,"optimiser");
+  S.allocId=`${S.sid}-OPT-1`; S.planHash=hex(); S.block++;
+  r.lines.forEach(l=>{S.reserved[l.a]=(S.reserved[l.a]||0)+l.u;S.ver[l.a]++;S.events.push({type:"Reserved",asset:l.a,obl:l.o,units:l.u,free:A[l.a].qty-S.reserved[l.a],block:S.block,tx:hex(),actor:"Allocator desk",on:true})});
+  S.events.push({type:"AllocationCommitted",asset:"—",obl:`${r.lines.length} lines`,block:S.block,tx:S.planHash,actor:"Allocator desk",on:true});
+  r.cov.forEach(o=>S.events.push({type:"CoverageRecorded",asset:"—",obl:o.id+(o.short>0.5?` · short ₹${inr(o.short,0)} L`:" · covered"),block:S.block,tx:hex(),actor:"Contract",on:true}));
+  S.committed=true;
+  if(!silent) toast(`Committed in block ${S.block}: ${r.lines.length} reservations sealed`);
+  renderAll();
+}
+function optimise(){
+  const log=$("#log"), r=evaluate(S.sid,"optimiser"), steps=[
+   "› loading inventory and free quantities from chain…",
+   "› stage 1 · minimising priority-weighted shortfall…",
+   "› stage 2 · minimising funding cost…",
+   `› integer verification… <span class="ok">passed</span> (38 ms)`,
+   r.sh<0.5?`› <span class="ok">optimal</span> · ₹${inr(r.fund)} L/yr · no shortfall`:`› optimal · shortfall ₹${inr(r.sh)} L on lowest priority`];
+  log.innerHTML=""; $("#btnOpt").disabled=true;
+  const meters=document.querySelectorAll(".meter .cov"); meters.forEach(m=>{m.dataset.w=m.style.width;m.style.width="0%"});
+  const fast=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  steps.forEach((s,i)=>setTimeout(()=>{log.innerHTML+=(i?"\n":"")+s; if(i===steps.length-1){$("#btnOpt").disabled=false; meters.forEach(m=>m.style.width=m.dataset.w)}},fast?0:i*260));
+}
+function setView(v){S.view=v;document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===v));
+  document.querySelectorAll("section.view").forEach(s=>s.hidden=s.id!=="v-"+v);
+  try{localStorage.setItem("pg-view",v)}catch(e){}
+  renderAll();}
+function renderAll(){
+  $("#blockno").textContent=S.block;
+  $("#btnCommit").disabled=S.committed;
+  $("#btnCommit").lastChild.textContent=S.committed?"Committed":"Commit to chain";
+  if(S.view==="desk")renderDesk(); if(S.view==="flow")renderFlow(); if(S.view==="ledger")renderLedger(); if(S.view==="arena")renderArena(); if(S.view==="compare")renderCompare();
+}
+let tt; function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("on"),2600)}
+
+// guilloche: security-print rosette
+function guilloche(){const c=$("#guilloche"); if(!c||getComputedStyle(c).display==="none")return; const d=devicePixelRatio||1; c.width=340*d;c.height=340*d; const g=c.getContext("2d"); g.scale(d,d); g.clearRect(0,0,340,340);
+  g.strokeStyle=css("--guill"); g.lineWidth=.7;
+  for(let k=0;k<3;k++){g.beginPath(); for(let t=0;t<=Math.PI*2*7;t+=.01){const R=110+k*22,r=38-k*6,dd=60-k*10; const x=170+(R-r)*Math.cos(t)+dd*Math.cos((R-r)/r*t), y=170+(R-r)*Math.sin(t)-dd*Math.sin((R-r)/r*t); t?g.lineTo(x,y):g.moveTo(x,y)} g.stroke()}}
+
+// wire up
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>setView(b.dataset.v));
+document.querySelectorAll("#methodSeg button").forEach(b=>b.onclick=()=>{S.method=b.dataset.m;renderFlow()});
+$("#btnReset").onclick=()=>resetChain();
+$("#btnCommit").onclick=()=>commit();
+$("#btnOpt").onclick=()=>{setView("desk");optimise()};
+$("#scenario").onchange=e=>{S.sid=e.target.value;resetChain(true);toast("Scenario loaded: "+SCEN[S.sid].name);if(S.view==="desk")optimise()};
+addEventListener("keydown",e=>{if(e.target.matches("input,select,textarea"))return;const m={r:()=>resetChain(),o:()=>{setView("desk");optimise()},c:()=>commit(),"1":()=>setView("desk"),"2":()=>setView("flow"),"3":()=>setView("ledger"),"4":()=>setView("arena"),"5":()=>setView("compare")}[e.key.toLowerCase()];if(m){m();}});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{guilloche();renderAll()});
+new MutationObserver(()=>{guilloche();renderAll()}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+addEventListener("resize",()=>{guilloche()});
+
+resetChain(true);
+let start="desk"; try{start=localStorage.getItem("pg-view")||"desk"}catch(e){}
+setView(["desk","flow","ledger","arena","compare"].includes(start)?start:"desk");
+$("#log").innerHTML=`› last run · stage 1 + stage 2 · <span class="ok">optimal</span> in 38 ms\n› press Optimise (O) to re-run, Commit (C) to seal on-chain`;
+document.fonts && document.fonts.ready.then(guilloche); guilloche();
+</script>
+
+</body></html>
