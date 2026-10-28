@@ -270,7 +270,7 @@ function App() {
           </div>
         </header>
 
-        <div className="canvas">
+           <div className="canvas" key={page}>
           {page === 'overview' && (
             <Overview
               scenario={scenario}
@@ -1288,7 +1288,7 @@ function Security({ blocked, run, scenario, vault, plan }) {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <b>{money(ob.required_lakh)}</b>
-                    <div style={{ fontSize: 11, color: '#047857' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mint-strong)' }}>
                       Secured on-chain
                     </div>
                   </div>
@@ -1399,7 +1399,7 @@ function Security({ blocked, run, scenario, vault, plan }) {
                 Attempts
               </div>
               <div>
-                <b style={{ display: 'block', fontSize: 18, color: '#047857' }}>
+                <b style={{ display: 'block', fontSize: 18, color: 'var(--mint-strong)' }}>
                   {blockedCount}
                 </b>
                 Blocked
@@ -2255,13 +2255,13 @@ function BattleArena({ plans }) {
         <div className="battle-step win">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span className="badge-pill mint">Stage 1 · CCP Clearing</span>
-            <Check size={16} color="#047857" />
+            <Check size={16} color="var(--mint-strong)" />
           </div>
           <b>Nexora AI Preserves Scarce Gilts</b>
           <p>
             Recognizes that <strong>G-Secs are the only eligible asset</strong> for Bank Repo. Nexora routes <strong>Cash & T-Bills</strong> to CCIL margin, saving Gilts for downstream demand.
           </p>
-          <div style={{ marginTop: 10, fontSize: 11, color: '#047857', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, fontSize: 11, color: 'var(--mint-strong)', fontWeight: 600 }}>
             Greedy burns G-Sec 2029 & 2034 here because of 18-22 bps cost.
           </div>
         </div>
@@ -2269,13 +2269,13 @@ function BattleArena({ plans }) {
         <div className="battle-step win">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span className="badge-pill mint">Stage 2 · OTC Bilateral</span>
-            <Check size={16} color="#047857" />
+            <Check size={16} color="var(--mint-strong)" />
           </div>
           <b>Haircut Efficiency Matching</b>
           <p>
             Allocates high-haircut <strong>NIFTY50 Basket</strong> and <strong>Corporate AAA</strong> to OTC, absorbing requirements while respecting counterparty hair-cut penalties.
           </p>
-          <div style={{ marginTop: 10, fontSize: 11, color: '#047857', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, fontSize: 11, color: 'var(--mint-strong)', fontWeight: 600 }}>
             Optimizes across 15 simultaneous decision variables.
           </div>
         </div>
@@ -2283,13 +2283,13 @@ function BattleArena({ plans }) {
         <div className="battle-step fail">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span className="badge-pill coral">Stage 3 · Bank Repo</span>
-            <TriangleAlert size={16} color="#b91c1c" />
+            <TriangleAlert size={16} color="var(--coral)" />
           </div>
-          <b style={{ color: '#b91c1c' }}>Greedy Suffers ₹2,666L Shortfall!</b>
+          <b style={{ color: 'var(--coral)' }}>Greedy Suffers ₹2,666L Shortfall!</b>
           <p>
             Bank Repo demands ₹5,000L. Greedy consumed G-Secs in Stage 1 and has no eligible collateral left. Result: <strong>regulatory default & penalty</strong>.
           </p>
-          <div style={{ marginTop: 10, fontSize: 11, color: '#047857', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, fontSize: 11, color: 'var(--mint-strong)', fontWeight: 600 }}>
             Nexora achieves 100% coverage with ₹0 shortfall!
           </div>
         </div>
@@ -2298,11 +2298,11 @@ function BattleArena({ plans }) {
       <div className="telemetry-grid" style={{ marginBottom: 0, marginTop: 16 }}>
         <div className="telemetry-card">
           <span>REGULATORY PENALTY AVOIDED</span>
-          <b style={{ color: '#047857' }}>₹{penaltyAvoided.toFixed(2)} Lakh</b>
+          <b style={{ color: 'var(--mint-strong)' }}>₹{penaltyAvoided.toFixed(2)} Lakh</b>
         </div>
         <div className="telemetry-card">
           <span>EFFECTIVE COST REDUCTION</span>
-          <b style={{ color: '#047857' }}>{((savings / cheapCost) * 100).toFixed(1)}% Lower</b>
+          <b style={{ color: 'var(--mint-strong)' }}>{((savings / cheapCost) * 100).toFixed(1)}% Lower</b>
         </div>
         <div className="telemetry-card">
           <span>OPTIMAL MILP SOLVE LATENCY</span>
@@ -2401,7 +2401,7 @@ function MathTraceModal({ plan, onClose }) {
                   <td>{(line.haircut_bps / 100).toFixed(1)}%</td>
                   <td>{money(line.annual_cost_lakh)}</td>
                   <td>
-                    <span style={{ color: '#047857', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--mint-strong)', fontWeight: 500 }}>
                       {line.reason || 'Optimal asset under dual-stage constraints'}
                     </span>
                   </td>

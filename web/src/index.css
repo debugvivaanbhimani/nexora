@@ -1,54 +1,35 @@
 @import '@fontsource/jetbrains-mono/500.css';
 
 :root {
-  --f-display: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
-  --f-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --f-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-
-  --ink: #10251f;
-  --ink-soft: #253933;
-  --muted: #597067;
-  --muted-light: #83978f;
-  --paper: #f4f6f2;
-  --surface: #ffffff;
-  --surface-hover: #f7faf7;
-  --line: #dce3dd;
-  --dark: #122822;
-  --dark-surface: #18332c;
-  --mint: #7ecba2;
-  --mint-strong: #1e9464;
-  --lime: #d6e8ad;
-  --coral: #f17865;
-  --plum: #674766;
-  --blue: #456b8c;
-  --sand: #eadfcf;
-
-  /* Vibrant Asset Palette */
-  --c-cash: #2a78d6;
-  --c-tbill: #eb6834;
-  --c-gsec29: #1baf7a;
-  --c-gsec34: #eda100;
-  --c-corp: #e87ba4;
-  --c-equity: #6250d6;
+  --dark: #0b0e1f;
+  --ink: #eef0ff;
+  --muted: #9aa0c3;
+  --surface: rgba(255,255,255,.05);
+  --paper: rgba(255,255,255,.04);
+  --line: rgba(255,255,255,.10);
+  --mint: #5eead4;
+  --mint-strong: #34d399;
+  --lime: rgba(124,92,255,.16);
+  --coral: #fb7185;
+  --plum: #c084fc;
+  --blue: #60a5fa;
+  --accent-a: #7c5cff;
+  --accent-b: #22d3ee;
+  --f-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-* { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--paper);
   color: var(--ink);
   font-family: var(--f-body);
-  font-size: 14.5px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-  min-width: 1180px;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--f-display);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  margin: 0;
+  background:
+    radial-gradient(900px 500px at 15% -10%, rgba(124,92,255,.35), transparent 60%),
+    radial-gradient(800px 500px at 90% 10%, rgba(34,211,238,.22), transparent 60%),
+    linear-gradient(180deg, #0d1020, #07080f);
+  background-attachment: fixed;
+  min-height: 100vh;
 }
 
 button, select { font-family: var(--f-body); }
